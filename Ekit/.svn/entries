@@ -1,0 +1,58 @@
+8
+
+dir
+24
+https://jodypaul.com/svngenie/Philip/New%20Folder
+https://jodypaul.com/svngenie
+
+
+
+2012-10-23T20:58:44.135130Z
+24
+philip
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+cc09d97c-3c2f-4f36-8497-fa8c7e5df71a
+
+.classpath
+file
+25
+
+
+
+2012-10-23T20:45:23.000000Z
+0feefca3562e5167ed8224d805b3b922
+2012-10-23T20:59:50.052892Z
+25
+philip
+
+.project
+file
+25
+
+
+
+2012-10-23T20:45:23.000000Z
+d4616fdf8a2623663e48c4908b056d5a
+2012-10-23T20:59:50.052892Z
+25
+philip
+
+.settings
+dir
+
+src
+dir
+
