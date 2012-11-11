@@ -49,6 +49,7 @@ public class EkitApplet extends JApplet
 {
 	/* Components */
 	EkitCore ekitCore;
+	EkitUtility convenienceMethods;
 
 	/** Constructor
 	  */
@@ -61,6 +62,7 @@ public class EkitApplet extends JApplet
 	  */
 	public void init()
 	{
+		convenienceMethods = new EkitUtility();
 		String sRawDocument = this.getParameter("DOCUMENT");
 		String sStyleSheetRef = this.getParameter("STYLESHEET");
 		boolean base64 = ((this.getParameter("BASE64") != null) && this.getParameter("BASE64").equalsIgnoreCase("true"));

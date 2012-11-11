@@ -3129,16 +3129,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public JMenuBar getCustomMenuBar(Vector<String> vcMenus)
 	{
-		jMenuBar = new JMenuBar();
-		for(int i = 0; i < vcMenus.size(); i++)
-		{
-			String menuToAdd = vcMenus.elementAt(i).toLowerCase();
-			if(htMenus.containsKey(menuToAdd))
-			{
-				jMenuBar.add((JMenu)(htMenus.get(menuToAdd)));
-			}
-		}
-		return jMenuBar;
+		//moved method body to ConvenienceMethods.getCustomMenuBar
+				//via Extract method
+				return convenience.getCustomMenuBar(vcMenus, htMenus);
 	}
 
 	/** Convenience method for creating the multiple toolbar set from a sequence string
@@ -3146,28 +3139,13 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void initializeMultiToolbars(String toolbarSeq)
 	{
 		ArrayList<Vector<String>> vcToolPicks = new ArrayList<Vector<String>>(3);
-		vcToolPicks.add(0, new Vector<String>());
-		vcToolPicks.add(1, new Vector<String>());
-		vcToolPicks.add(2, new Vector<String>());
+		//moved method body to ConvenienceMethods.buildMultiToolBarElements
+		//via Extract method
+		convenience.buildMultiToolBarElements(toolbarSeq);
 
-		int whichBar = 0;
-		StringTokenizer stToolbars = new StringTokenizer(toolbarSeq.toUpperCase(), "|");
-		while(stToolbars.hasMoreTokens())
-		{
-			String sKey = stToolbars.nextToken();
-			if(sKey.equals("*"))
-			{
-				whichBar++;
-				if(whichBar > 2)
-				{
-					whichBar = 2;
-				}
-			}
-			else
-			{
-				vcToolPicks.get(whichBar).add(sKey);
-			}
-		}
+		customizeToolBar(TOOLBAR_MAIN,   vcToolPicks.get(0), true);
+		customizeToolBar(TOOLBAR_FORMAT, vcToolPicks.get(1), true);
+		customizeToolBar(TOOLBAR_STYLES, vcToolPicks.get(2), true);
 
 		customizeToolBar(TOOLBAR_MAIN,   vcToolPicks.get(0), true);
 		customizeToolBar(TOOLBAR_FORMAT, vcToolPicks.get(1), true);
