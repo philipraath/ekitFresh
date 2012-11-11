@@ -31,6 +31,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -99,6 +100,7 @@ import javax.swing.text.StyledEditorKit;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
 import javax.swing.text.rtf.RTFEditorKit;
 import javax.swing.undo.UndoManager;
 import javax.swing.undo.CannotUndoException;
@@ -122,6 +124,105 @@ import com.hexidec.ekit.thirdparty.print.DocumentRenderer;
 
 public class EkitCore extends JPanel implements ActionListener, KeyListener, FocusListener, DocumentListener
 {
+	/* Components */
+	private JSplitPane jspltDisplay;
+	private JTextPane jtpMain;
+	private ExtendedHTMLEditorKit htmlKit;
+	private ExtendedHTMLDocument htmlDoc;
+	private StyleSheet styleSheet;
+	private JTextArea jtpSource;
+	private JScrollPane jspSource;
+	private JToolBar jToolBar;
+	private JToolBar jToolBarMain;
+	private JToolBar jToolBarFormat;
+	private JToolBar jToolBarStyles;
+
+	private JButtonNoFocus jbtnNewHTML;
+	private JButtonNoFocus jbtnNewStyledHTML;
+	private JButtonNoFocus jbtnOpenHTML;
+	private JButtonNoFocus jbtnSaveHTML;
+	private JButtonNoFocus jbtnPrint;
+	private JButtonNoFocus jbtnCut;
+	private JButtonNoFocus jbtnCopy;
+	private JButtonNoFocus jbtnPaste;
+	private JButtonNoFocus jbtnPasteX;
+	private JButtonNoFocus jbtnUndo;
+	private JButtonNoFocus jbtnRedo;
+	private JButtonNoFocus jbtnBold;
+	private JButtonNoFocus jbtnItalic;
+	private JButtonNoFocus jbtnUnderline;
+	private JButtonNoFocus jbtnStrike;
+	private JButtonNoFocus jbtnSuperscript;
+	private JButtonNoFocus jbtnSubscript;
+	private JButtonNoFocus jbtnUList;
+	private JButtonNoFocus jbtnOList;
+	private JButtonNoFocus jbtnAlignLeft;
+	private JButtonNoFocus jbtnAlignCenter;
+	private JButtonNoFocus jbtnAlignRight;
+	private JButtonNoFocus jbtnAlignJustified;
+	private JButtonNoFocus jbtnFind;
+	private JButtonNoFocus jbtnUnicode;
+	private JButtonNoFocus jbtnUnicodeMath;
+	private JButtonNoFocus jbtnAnchor;
+	private JButtonNoFocus jbtnInsertTable;
+	private JButtonNoFocus jbtnEditTable;
+	private JButtonNoFocus jbtnEditCell;
+	private JButtonNoFocus jbtnInsertRow;
+	private JButtonNoFocus jbtnInsertColumn;
+	private JButtonNoFocus jbtnDeleteRow;
+	private JButtonNoFocus jbtnDeleteColumn;
+	private JToggleButtonNoFocus jtbtnViewSource;
+	private JComboBoxNoFocus jcmbStyleSelector;
+	private JComboBoxNoFocus jcmbFontSelector;
+
+	private Frame frameHandler;
+
+	private HTMLUtilities htmlUtilities = new HTMLUtilities(this);
+
+	/* Actions */
+	private StyledEditorKit.BoldAction actionFontBold;
+	private StyledEditorKit.ItalicAction actionFontItalic;
+	private StyledEditorKit.UnderlineAction actionFontUnderline;
+	private FormatAction actionFontStrike;
+	private FormatAction actionFontSuperscript;
+	private FormatAction actionFontSubscript;
+	private ListAutomationAction actionListUnordered;
+	private ListAutomationAction actionListOrdered;
+	private SetFontFamilyAction actionSelectFont;
+	private AlignAction actionAlignLeft;
+	private AlignAction actionAlignCenter;
+	private AlignAction actionAlignRight;
+	private AlignAction actionAlignJustified;
+	private CustomAction actionInsertAnchor;
+
+	protected UndoManager undoMngr;
+	protected UndoAction undoAction;
+	protected RedoAction redoAction;
+
+	/* Menus */
+	private JMenuBar jMenuBar;
+	private JMenu jMenuFile;
+	private JMenu jMenuEdit;
+	private JMenu jMenuView;
+	private JMenu jMenuFont;
+	private JMenu jMenuFormat;
+	private JMenu jMenuInsert;
+	private JMenu jMenuTable;
+	private JMenu jMenuForms;
+	private JMenu jMenuSearch;
+	private JMenu jMenuTools;
+	private JMenu jMenuHelp;
+	private JMenu jMenuDebug;
+
+	private JMenu jMenuToolbars;
+	private JCheckBoxMenuItem jcbmiViewToolbar;
+	private JCheckBoxMenuItem jcbmiViewToolbarMain;
+	private JCheckBoxMenuItem jcbmiViewToolbarFormat;
+	private JCheckBoxMenuItem jcbmiViewToolbarStyles;
+	private JCheckBoxMenuItem jcbmiViewSource;
+	private JCheckBoxMenuItem jcbmiEnterKeyParag;
+	private JCheckBoxMenuItem jcbmiEnterKeyBreak;
+
 	/* Constants */
 	// Menu Keys
 	public static final String KEY_MENU_FILE   = "file";
@@ -243,17 +344,53 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public static final String CMD_SPELLCHECK = "spellcheck";
 	public static final String CMD_HELP_ABOUT = "helpabout";
 	public static final String CMD_DEBUG_DESCRIBE_DOC = "describedoc";
-	public static final String CMD_DEBUG_DESCRIBE_CSS = "describecss";	
+	public static final String CMD_DEBUG_DESCRIBE_CSS = "describecss";
 	public static final String CMD_DEBUG_CURRENT_TAGS = "whattags";
 
 	// Menu & Tool Key Arrays
 	private static Hashtable<String, JMenu>      htMenus = new Hashtable<String, JMenu>();
 	private static Hashtable<String, JComponent> htTools = new Hashtable<String, JComponent>();
 
-	protected EkitCoreData data = new EkitCoreData(new HTMLUtilities(this), "Ekit", "...",
-			true, "#cccccc", 0, true, false, null, null, false, false, null, ".", 0,
-			4, true, new String[] { "html", "htm", "shtml" }, new String[] { "css" }, new String[] { "gif", "jpg", "jpeg", "png" },
-			new String[] { "rtf" }, new String[] { "b64" }, new String[] { "ser" }, KeyEvent.CTRL_MASK);
+	private final String appName = "Ekit";
+	private final String menuDialog = "..."; /* text to append to a MenuItem label when menu item opens a dialog */
+
+	private final boolean useFormIndicator = true; /* Creates a highlighted background on a new FORM so that it may be more easily edited */
+	private final String clrFormIndicator = "#cccccc";
+
+	// System Clipboard Settings
+	private Clipboard sysClipboard; // pointer to system clipboard, if available
+
+	private DataFlavor dfPlainText;
+
+	/* Variables */
+	private int iSplitPos = 0;
+
+	private boolean exclusiveEdit = true;
+	private boolean preserveUnknownTags = false;
+
+	private String lastSearchFindTerm     = null;
+	private String lastSearchReplaceTerm  = null;
+	private boolean lastSearchCaseSetting = false;
+	private boolean lastSearchTopSetting  = false;
+
+	private File currentFile = null;
+	private String imageChooserStartDir = ".";
+
+	private int indent = 0;
+	private final int indentStep = 4;
+
+	private boolean enterIsBreak = true;
+
+	// File extensions for MutableFilter
+	private final String[] extsHTML = { "html", "htm", "shtml" };
+	private final String[] extsCSS  = { "css" };
+	private final String[] extsIMG  = { "gif", "jpg", "jpeg", "png" };
+	private final String[] extsRTF  = { "rtf" };
+	private final String[] extsB64  = { "b64" };
+	private final String[] extsSer  = { "ser" };
+
+	// Control key equivalents on different systems
+	private int CTRLKEY = KeyEvent.CTRL_MASK;
 
 	/** Master Constructor
 	  * @param sDocument         [String]  A text or HTML document to load in the editor upon startup.
@@ -279,11 +416,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		super();
 
-		data.setExclusiveEdit(editModeExclusive);
-		data.setPreserveUnknownTags(keepUnknownTags);
-		data.setEnterIsBreak(enterBreak);
+		exclusiveEdit = editModeExclusive;
+		preserveUnknownTags = keepUnknownTags;
+		enterIsBreak = enterBreak;
 
-		data.setFrameHandler(new Frame());
+		frameHandler = new Frame();
 
 		// Determine if system clipboard is available (SecurityManager version)
 /*
@@ -305,17 +442,17 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		// Obtain system clipboard if available
 		try
 		{
-			data.setSysClipboard(Toolkit.getDefaultToolkit().getSystemClipboard());
+			sysClipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 		}
 		catch(Exception ex)
 		{
-			data.setSysClipboard(null);
+			sysClipboard = null;
 		}
 
 		// Plain text DataFlavor for unformatted paste
 		try
 		{
-			data.setDfPlainText(new DataFlavor("text/plain; class=java.lang.String; charset=Unicode")); // Charsets usually available include Unicode, UTF-16, UTF-8, & US-ASCII
+			dfPlainText = new DataFlavor("text/plain; class=java.lang.String; charset=Unicode"); // Charsets usually available include Unicode, UTF-16, UTF-8, & US-ASCII
 		}
 		catch(ClassNotFoundException cnfe)
 		{
@@ -323,7 +460,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			// this will not work as desired, but it will prevent errors from being thrown later
 			// alternately, we could flag up here that Unformatted Paste is not available and adjust the UI accordingly
 			// however, the odds of java.lang.String not being found are pretty slim one imagines
-			data.setDfPlainText(DataFlavor.stringFlavor);
+			dfPlainText = DataFlavor.stringFlavor;
 		}
 
 		/* Localize for language */
@@ -338,48 +475,48 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		/* Initialise system-specific control key value */
 		if(!(GraphicsEnvironment.isHeadless()))
 		{
-			data.setCTRLKEY(Toolkit.getDefaultToolkit().getMenuShortcutKeyMask());
+			CTRLKEY = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
 		}
 
 		/* Create the editor kit, document, and stylesheet */
-		data.setJtpMain(new JTextPane());
-		data.setHtmlKit(new ExtendedHTMLEditorKit());
-		data.setHtmlDoc((ExtendedHTMLDocument)(data.getHtmlKit().createDefaultDocument()));
-		data.getHtmlDoc().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-		data.getHtmlDoc().setPreservesUnknownTags(data.isPreserveUnknownTags());
-		data.setStyleSheet(data.getHtmlDoc().getStyleSheet());
-		data.getHtmlKit().setDefaultCursor(new Cursor(Cursor.TEXT_CURSOR));
-		data.getJtpMain().setCursor(new Cursor(Cursor.TEXT_CURSOR));
+		jtpMain = new JTextPane();
+		htmlKit = new ExtendedHTMLEditorKit();
+		htmlDoc = (ExtendedHTMLDocument)(htmlKit.createDefaultDocument());
+		htmlDoc.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
+		htmlDoc.setPreservesUnknownTags(preserveUnknownTags);
+		styleSheet = htmlDoc.getStyleSheet();
+		htmlKit.setDefaultCursor(new Cursor(Cursor.TEXT_CURSOR));
+		jtpMain.setCursor(new Cursor(Cursor.TEXT_CURSOR));
 
 		/* Set up the text pane */
-		data.getJtpMain().setEditorKit(data.getHtmlKit());
-		data.getJtpMain().setDocument(data.getHtmlDoc());
-		data.getJtpMain().setMargin(new Insets(4, 4, 4, 4));
-		data.getJtpMain().addKeyListener(this);
-		data.getJtpMain().addFocusListener(this);
-//		deleted dead code
+		jtpMain.setEditorKit(htmlKit);
+		jtpMain.setDocument(htmlDoc);
+		jtpMain.setMargin(new Insets(4, 4, 4, 4));
+		jtpMain.addKeyListener(this);
+		jtpMain.addFocusListener(this);
+//		jtpMain.setDragEnabled(true); // this causes an error in older Java versions
 
 		/* Create the source text area */
 		if(sdocSource == null)
 		{
-			data.setJtpSource(new JTextArea());
-			data.getJtpSource().setText(data.getJtpMain().getText());
+			jtpSource = new JTextArea();
+			jtpSource.setText(jtpMain.getText());
 		}
 		else
 		{
-			data.setJtpSource(new JTextArea(sdocSource));
-			data.getJtpMain().setText(data.getJtpSource().getText());
+			jtpSource = new JTextArea(sdocSource);
+			jtpMain.setText(jtpSource.getText());
 		}
-		data.getJtpSource().setBackground(new Color(212, 212, 212));
-		data.getJtpSource().setSelectionColor(new Color(255, 192, 192));
-		data.getJtpSource().setMargin(new Insets(4, 4, 4, 4));
-		data.getJtpSource().getDocument().addDocumentListener(this);
-		data.getJtpSource().addFocusListener(this);
-		data.getJtpSource().setCursor(new Cursor(Cursor.TEXT_CURSOR));
-		data.getJtpSource().setColumns(1024);
+		jtpSource.setBackground(new Color(212, 212, 212));
+		jtpSource.setSelectionColor(new Color(255, 192, 192));
+		jtpSource.setMargin(new Insets(4, 4, 4, 4));
+		jtpSource.getDocument().addDocumentListener(this);
+		jtpSource.addFocusListener(this);
+		jtpSource.setCursor(new Cursor(Cursor.TEXT_CURSOR));
+		jtpSource.setColumns(1024);
 
 		/* Add CaretListener for tracking caret location events */
-		data.getJtpMain().addCaretListener(new CaretListener()
+		jtpMain.addCaretListener(new CaretListener()
 		{
 			public void caretUpdate(CaretEvent ce)
 			{
@@ -388,43 +525,43 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		});
 
 		/* Set up the undo features */
-		data.setUndoMngr(new UndoManager());
-		data.setUndoAction(new UndoAction());
-		data.setRedoAction(new RedoAction());
-		data.getJtpMain().getDocument().addUndoableEditListener(new CustomUndoableEditListener());
+		undoMngr = new UndoManager();
+		undoAction = new UndoAction();
+		redoAction = new RedoAction();
+		jtpMain.getDocument().addUndoableEditListener(new CustomUndoableEditListener());
 
 		/* Insert raw document, if exists */
 		if(sRawDocument != null && sRawDocument.length() > 0)
 		{
 			if(base64)
 			{
-				data.getJtpMain().setText(Base64Codec.decode(sRawDocument));
+				jtpMain.setText(Base64Codec.decode(sRawDocument));
 			}
 			else
 			{
-				data.getJtpMain().setText(sRawDocument);
+				jtpMain.setText(sRawDocument);
 			}
 		}
-		data.getJtpMain().setCaretPosition(0);
-		data.getJtpMain().getDocument().addDocumentListener(this);
+		jtpMain.setCaretPosition(0);
+		jtpMain.getDocument().addDocumentListener(this);
 
 		/* Import CSS from reference, if exists */
 		if(urlStyleSheet != null)
 		{
 			try
 			{
-				String currDocText = data.getJtpMain().getText();
-				data.setHtmlDoc((ExtendedHTMLDocument)(data.getHtmlKit().createDefaultDocument()));
-				data.getHtmlDoc().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-				data.getHtmlDoc().setPreservesUnknownTags(data.isPreserveUnknownTags());
-				data.setStyleSheet(data.getHtmlDoc().getStyleSheet());
+				String currDocText = jtpMain.getText();
+				htmlDoc = (ExtendedHTMLDocument)(htmlKit.createDefaultDocument());
+				htmlDoc.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
+				htmlDoc.setPreservesUnknownTags(preserveUnknownTags);
+				styleSheet = htmlDoc.getStyleSheet();
 				BufferedReader br = new BufferedReader(new InputStreamReader(urlStyleSheet.openStream()));
-				data.getStyleSheet().loadRules(br, urlStyleSheet);
+				styleSheet.loadRules(br, urlStyleSheet);
 				br.close();
-				data.setHtmlDoc(new ExtendedHTMLDocument(data.getStyleSheet()));
-				registerDocument(data.getHtmlDoc());
-				data.getJtpMain().setText(currDocText);
-				data.getJtpSource().setText(data.getJtpMain().getText());
+				htmlDoc = new ExtendedHTMLDocument(styleSheet);
+				registerDocument(htmlDoc);
+				jtpMain.setText(currDocText);
+				jtpSource.setText(jtpMain.getText());
 			}
 			catch(Exception e)
 			{
@@ -468,133 +605,133 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 
 		/* Collect the actions that the JTextPane is naturally aware of */
 		Hashtable<Object, Action> actions = new Hashtable<Object, Action>();
-		Action[] actionsArray = data.getJtpMain().getActions();
+		Action[] actionsArray = jtpMain.getActions();
 		for(Action a : actionsArray)
 		{
 			actions.put(a.getValue(Action.NAME), a);
 		}
 
 		/* Create shared actions */
-		data.setActionFontBold(new StyledEditorKit.BoldAction());
-		data.setActionFontItalic(new StyledEditorKit.ItalicAction());
-		data.setActionFontUnderline(new StyledEditorKit.UnderlineAction());
-		data.setActionFontStrike(new FormatAction(this, Translatrix.getTranslationString("FontStrike"), HTML.Tag.STRIKE));
-		data.setActionFontSuperscript(new FormatAction(this, Translatrix.getTranslationString("FontSuperscript"), HTML.Tag.SUP));
-		data.setActionFontSubscript(new FormatAction(this, Translatrix.getTranslationString("FontSubscript"), HTML.Tag.SUB));
-		data.setActionListUnordered(new ListAutomationAction(this, Translatrix.getTranslationString("ListUnordered"), HTML.Tag.UL));
-		data.setActionListOrdered(new ListAutomationAction(this, Translatrix.getTranslationString("ListOrdered"), HTML.Tag.OL));
-		data.setActionSelectFont(new SetFontFamilyAction(this, "[MENUFONTSELECTOR]"));
-		data.setActionAlignLeft(new AlignAction(this, Translatrix.getTranslationString("AlignLeft"), StyleConstants.ALIGN_LEFT));
-		data.setActionAlignCenter(new AlignAction(this, Translatrix.getTranslationString("AlignCenter"), StyleConstants.ALIGN_CENTER));
-		data.setActionAlignRight(new AlignAction(this, Translatrix.getTranslationString("AlignRight"), StyleConstants.ALIGN_RIGHT));
-		data.setActionAlignJustified(new AlignAction(this, Translatrix.getTranslationString("AlignJustified"), StyleConstants.ALIGN_JUSTIFIED));
-		data.setActionInsertAnchor(new CustomAction(this, Translatrix.getTranslationString("InsertAnchor") + data.getMenuDialog(), HTML.Tag.A));
+		actionFontBold        = new StyledEditorKit.BoldAction();
+		actionFontItalic      = new StyledEditorKit.ItalicAction();
+		actionFontUnderline   = new StyledEditorKit.UnderlineAction();
+		actionFontStrike      = new FormatAction(this, Translatrix.getTranslationString("FontStrike"), HTML.Tag.STRIKE);
+		actionFontSuperscript = new FormatAction(this, Translatrix.getTranslationString("FontSuperscript"), HTML.Tag.SUP);
+		actionFontSubscript   = new FormatAction(this, Translatrix.getTranslationString("FontSubscript"), HTML.Tag.SUB);
+		actionListUnordered   = new ListAutomationAction(this, Translatrix.getTranslationString("ListUnordered"), HTML.Tag.UL);
+		actionListOrdered     = new ListAutomationAction(this, Translatrix.getTranslationString("ListOrdered"), HTML.Tag.OL);
+		actionSelectFont      = new SetFontFamilyAction(this, "[MENUFONTSELECTOR]");
+		actionAlignLeft       = new AlignAction(this, Translatrix.getTranslationString("AlignLeft"), StyleConstants.ALIGN_LEFT);
+		actionAlignCenter     = new AlignAction(this, Translatrix.getTranslationString("AlignCenter"), StyleConstants.ALIGN_CENTER);
+		actionAlignRight      = new AlignAction(this, Translatrix.getTranslationString("AlignRight"), StyleConstants.ALIGN_RIGHT);
+		actionAlignJustified  = new AlignAction(this, Translatrix.getTranslationString("AlignJustified"), StyleConstants.ALIGN_JUSTIFIED);
+		actionInsertAnchor    = new CustomAction(this, Translatrix.getTranslationString("InsertAnchor") + menuDialog, HTML.Tag.A);
 
 		/* Build the menus */
 		/* FILE Menu */
-		data.setjMenuFile(new JMenu(Translatrix.getTranslationString("File")));
-		htMenus.put(KEY_MENU_FILE, data.getjMenuFile());
-		JMenuItem jmiNew       = new JMenuItem(Translatrix.getTranslationString("NewDocument"));                     jmiNew.setActionCommand(CMD_DOC_NEW);              jmiNew.addActionListener(this);       jmiNew.setAccelerator(KeyStroke.getKeyStroke('N', data.getCTRLKEY(), false));      if(showMenuIcons) { jmiNew.setIcon(getEkitIcon("New")); }; data.getjMenuFile().add(jmiNew);
-		JMenuItem jmiNewStyled = new JMenuItem(Translatrix.getTranslationString("NewStyledDocument"));               jmiNewStyled.setActionCommand(CMD_DOC_NEW_STYLED); jmiNewStyled.addActionListener(this); if(showMenuIcons) { jmiNewStyled.setIcon(getEkitIcon("NewStyled")); };   data.getjMenuFile().add(jmiNewStyled);
-		JMenuItem jmiOpenHTML  = new JMenuItem(Translatrix.getTranslationString("OpenDocument") + data.getMenuDialog());       jmiOpenHTML.setActionCommand(CMD_DOC_OPEN_HTML);   jmiOpenHTML.addActionListener(this);  jmiOpenHTML.setAccelerator(KeyStroke.getKeyStroke('O', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiOpenHTML.setIcon(getEkitIcon("Open")); }; data.getjMenuFile().add(jmiOpenHTML);
-		JMenuItem jmiOpenCSS   = new JMenuItem(Translatrix.getTranslationString("OpenStyle") + data.getMenuDialog());          jmiOpenCSS.setActionCommand(CMD_DOC_OPEN_CSS);     jmiOpenCSS.addActionListener(this);   data.getjMenuFile().add(jmiOpenCSS);
-		JMenuItem jmiOpenB64   = new JMenuItem(Translatrix.getTranslationString("OpenBase64Document") + data.getMenuDialog()); jmiOpenB64.setActionCommand(CMD_DOC_OPEN_BASE64);  jmiOpenB64.addActionListener(this);   data.getjMenuFile().add(jmiOpenB64);
-		data.getjMenuFile().addSeparator();
-		JMenuItem jmiSave      = new JMenuItem(Translatrix.getTranslationString("Save"));                  jmiSave.setActionCommand(CMD_DOC_SAVE);           jmiSave.addActionListener(this);     jmiSave.setAccelerator(KeyStroke.getKeyStroke('S', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiSave.setIcon(getEkitIcon("Save")); }; data.getjMenuFile().add(jmiSave);
-		JMenuItem jmiSaveAs    = new JMenuItem(Translatrix.getTranslationString("SaveAs") + data.getMenuDialog());   jmiSaveAs.setActionCommand(CMD_DOC_SAVE_AS);      jmiSaveAs.addActionListener(this);   data.getjMenuFile().add(jmiSaveAs);
-		JMenuItem jmiSaveBody  = new JMenuItem(Translatrix.getTranslationString("SaveBody") + data.getMenuDialog()); jmiSaveBody.setActionCommand(CMD_DOC_SAVE_BODY);  jmiSaveBody.addActionListener(this); data.getjMenuFile().add(jmiSaveBody);
-		JMenuItem jmiSaveRTF   = new JMenuItem(Translatrix.getTranslationString("SaveRTF") + data.getMenuDialog());  jmiSaveRTF.setActionCommand(CMD_DOC_SAVE_RTF);    jmiSaveRTF.addActionListener(this);  data.getjMenuFile().add(jmiSaveRTF);
-		JMenuItem jmiSaveB64   = new JMenuItem(Translatrix.getTranslationString("SaveB64") + data.getMenuDialog());  jmiSaveB64.setActionCommand(CMD_DOC_SAVE_BASE64); jmiSaveB64.addActionListener(this);  data.getjMenuFile().add(jmiSaveB64);
-		data.getjMenuFile().addSeparator();
-		JMenuItem jmiPrint     = new JMenuItem(Translatrix.getTranslationString("Print")); jmiPrint.setActionCommand(CMD_DOC_PRINT); jmiPrint.addActionListener(this); data.getjMenuFile().add(jmiPrint);
-		data.getjMenuFile().addSeparator();
-		JMenuItem jmiSerialOut = new JMenuItem(Translatrix.getTranslationString("Serialize") + data.getMenuDialog());   jmiSerialOut.setActionCommand(CMD_DOC_SERIALIZE_OUT); jmiSerialOut.addActionListener(this); data.getjMenuFile().add(jmiSerialOut);
-		JMenuItem jmiSerialIn  = new JMenuItem(Translatrix.getTranslationString("ReadFromSer") + data.getMenuDialog()); jmiSerialIn.setActionCommand(CMD_DOC_SERIALIZE_IN);   jmiSerialIn.addActionListener(this);  data.getjMenuFile().add(jmiSerialIn);
-		data.getjMenuFile().addSeparator();
-		JMenuItem jmiExit      = new JMenuItem(Translatrix.getTranslationString("Exit")); jmiExit.setActionCommand(CMD_EXIT); jmiExit.addActionListener(this); data.getjMenuFile().add(jmiExit);
+		jMenuFile              = new JMenu(Translatrix.getTranslationString("File"));
+		htMenus.put(KEY_MENU_FILE, jMenuFile);
+		JMenuItem jmiNew       = new JMenuItem(Translatrix.getTranslationString("NewDocument"));                     jmiNew.setActionCommand(CMD_DOC_NEW);              jmiNew.addActionListener(this);       jmiNew.setAccelerator(KeyStroke.getKeyStroke('N', CTRLKEY, false));      if(showMenuIcons) { jmiNew.setIcon(getEkitIcon("New")); }; jMenuFile.add(jmiNew);
+		JMenuItem jmiNewStyled = new JMenuItem(Translatrix.getTranslationString("NewStyledDocument"));               jmiNewStyled.setActionCommand(CMD_DOC_NEW_STYLED); jmiNewStyled.addActionListener(this); if(showMenuIcons) { jmiNewStyled.setIcon(getEkitIcon("NewStyled")); };   jMenuFile.add(jmiNewStyled);
+		JMenuItem jmiOpenHTML  = new JMenuItem(Translatrix.getTranslationString("OpenDocument") + menuDialog);       jmiOpenHTML.setActionCommand(CMD_DOC_OPEN_HTML);   jmiOpenHTML.addActionListener(this);  jmiOpenHTML.setAccelerator(KeyStroke.getKeyStroke('O', CTRLKEY, false)); if(showMenuIcons) { jmiOpenHTML.setIcon(getEkitIcon("Open")); }; jMenuFile.add(jmiOpenHTML);
+		JMenuItem jmiOpenCSS   = new JMenuItem(Translatrix.getTranslationString("OpenStyle") + menuDialog);          jmiOpenCSS.setActionCommand(CMD_DOC_OPEN_CSS);     jmiOpenCSS.addActionListener(this);   jMenuFile.add(jmiOpenCSS);
+		JMenuItem jmiOpenB64   = new JMenuItem(Translatrix.getTranslationString("OpenBase64Document") + menuDialog); jmiOpenB64.setActionCommand(CMD_DOC_OPEN_BASE64);  jmiOpenB64.addActionListener(this);   jMenuFile.add(jmiOpenB64);
+		jMenuFile.addSeparator();
+		JMenuItem jmiSave      = new JMenuItem(Translatrix.getTranslationString("Save"));                  jmiSave.setActionCommand(CMD_DOC_SAVE);           jmiSave.addActionListener(this);     jmiSave.setAccelerator(KeyStroke.getKeyStroke('S', CTRLKEY, false)); if(showMenuIcons) { jmiSave.setIcon(getEkitIcon("Save")); }; jMenuFile.add(jmiSave);
+		JMenuItem jmiSaveAs    = new JMenuItem(Translatrix.getTranslationString("SaveAs") + menuDialog);   jmiSaveAs.setActionCommand(CMD_DOC_SAVE_AS);      jmiSaveAs.addActionListener(this);   jMenuFile.add(jmiSaveAs);
+		JMenuItem jmiSaveBody  = new JMenuItem(Translatrix.getTranslationString("SaveBody") + menuDialog); jmiSaveBody.setActionCommand(CMD_DOC_SAVE_BODY);  jmiSaveBody.addActionListener(this); jMenuFile.add(jmiSaveBody);
+		JMenuItem jmiSaveRTF   = new JMenuItem(Translatrix.getTranslationString("SaveRTF") + menuDialog);  jmiSaveRTF.setActionCommand(CMD_DOC_SAVE_RTF);    jmiSaveRTF.addActionListener(this);  jMenuFile.add(jmiSaveRTF);
+		JMenuItem jmiSaveB64   = new JMenuItem(Translatrix.getTranslationString("SaveB64") + menuDialog);  jmiSaveB64.setActionCommand(CMD_DOC_SAVE_BASE64); jmiSaveB64.addActionListener(this);  jMenuFile.add(jmiSaveB64);
+		jMenuFile.addSeparator();
+		JMenuItem jmiPrint     = new JMenuItem(Translatrix.getTranslationString("Print")); jmiPrint.setActionCommand(CMD_DOC_PRINT); jmiPrint.addActionListener(this); jMenuFile.add(jmiPrint);
+		jMenuFile.addSeparator();
+		JMenuItem jmiSerialOut = new JMenuItem(Translatrix.getTranslationString("Serialize") + menuDialog);   jmiSerialOut.setActionCommand(CMD_DOC_SERIALIZE_OUT); jmiSerialOut.addActionListener(this); jMenuFile.add(jmiSerialOut);
+		JMenuItem jmiSerialIn  = new JMenuItem(Translatrix.getTranslationString("ReadFromSer") + menuDialog); jmiSerialIn.setActionCommand(CMD_DOC_SERIALIZE_IN);   jmiSerialIn.addActionListener(this);  jMenuFile.add(jmiSerialIn);
+		jMenuFile.addSeparator();
+		JMenuItem jmiExit      = new JMenuItem(Translatrix.getTranslationString("Exit")); jmiExit.setActionCommand(CMD_EXIT); jmiExit.addActionListener(this); jMenuFile.add(jmiExit);
 
 		/* EDIT Menu */
-		data.setjMenuEdit(new JMenu(Translatrix.getTranslationString("Edit")));
-		htMenus.put(KEY_MENU_EDIT, data.getjMenuEdit());
-		if(data.getSysClipboard() != null)
+		jMenuEdit            = new JMenu(Translatrix.getTranslationString("Edit"));
+		htMenus.put(KEY_MENU_EDIT, jMenuEdit);
+		if(sysClipboard != null)
 		{
 			// System Clipboard versions of menu commands
-			JMenuItem jmiCut   = new JMenuItem(Translatrix.getTranslationString("Cut"));               jmiCut.setActionCommand(CMD_CLIP_CUT);            jmiCut.addActionListener(this);    jmiCut.setAccelerator(KeyStroke.getKeyStroke('X', data.getCTRLKEY(), false));   if(showMenuIcons) { jmiCut.setIcon(getEkitIcon("Cut")); }     data.getjMenuEdit().add(jmiCut);
-			JMenuItem jmiCopy  = new JMenuItem(Translatrix.getTranslationString("Copy"));              jmiCopy.setActionCommand(CMD_CLIP_COPY);          jmiCopy.addActionListener(this);   jmiCopy.setAccelerator(KeyStroke.getKeyStroke('C', data.getCTRLKEY(), false));  if(showMenuIcons) { jmiCopy.setIcon(getEkitIcon("Copy")); }   data.getjMenuEdit().add(jmiCopy);
-			JMenuItem jmiPaste = new JMenuItem(Translatrix.getTranslationString("Paste"));             jmiPaste.setActionCommand(CMD_CLIP_PASTE);        jmiPaste.addActionListener(this);  jmiPaste.setAccelerator(KeyStroke.getKeyStroke('V', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiPaste.setIcon(getEkitIcon("Paste")); } data.getjMenuEdit().add(jmiPaste);
-			JMenuItem jmiPasteX = new JMenuItem(Translatrix.getTranslationString("PasteUnformatted")); jmiPasteX.setActionCommand(CMD_CLIP_PASTE_PLAIN); jmiPasteX.addActionListener(this); jmiPasteX.setAccelerator(KeyStroke.getKeyStroke('V', data.getCTRLKEY() + KeyEvent.SHIFT_MASK, false)); if(showMenuIcons) { jmiPasteX.setIcon(getEkitIcon("PasteUnformatted")); } data.getjMenuEdit().add(jmiPasteX);
+			JMenuItem jmiCut   = new JMenuItem(Translatrix.getTranslationString("Cut"));               jmiCut.setActionCommand(CMD_CLIP_CUT);            jmiCut.addActionListener(this);    jmiCut.setAccelerator(KeyStroke.getKeyStroke('X', CTRLKEY, false));   if(showMenuIcons) { jmiCut.setIcon(getEkitIcon("Cut")); }     jMenuEdit.add(jmiCut);
+			JMenuItem jmiCopy  = new JMenuItem(Translatrix.getTranslationString("Copy"));              jmiCopy.setActionCommand(CMD_CLIP_COPY);          jmiCopy.addActionListener(this);   jmiCopy.setAccelerator(KeyStroke.getKeyStroke('C', CTRLKEY, false));  if(showMenuIcons) { jmiCopy.setIcon(getEkitIcon("Copy")); }   jMenuEdit.add(jmiCopy);
+			JMenuItem jmiPaste = new JMenuItem(Translatrix.getTranslationString("Paste"));             jmiPaste.setActionCommand(CMD_CLIP_PASTE);        jmiPaste.addActionListener(this);  jmiPaste.setAccelerator(KeyStroke.getKeyStroke('V', CTRLKEY, false)); if(showMenuIcons) { jmiPaste.setIcon(getEkitIcon("Paste")); } jMenuEdit.add(jmiPaste);
+			JMenuItem jmiPasteX = new JMenuItem(Translatrix.getTranslationString("PasteUnformatted")); jmiPasteX.setActionCommand(CMD_CLIP_PASTE_PLAIN); jmiPasteX.addActionListener(this); jmiPasteX.setAccelerator(KeyStroke.getKeyStroke('V', CTRLKEY + KeyEvent.SHIFT_MASK, false)); if(showMenuIcons) { jmiPasteX.setIcon(getEkitIcon("PasteUnformatted")); } jMenuEdit.add(jmiPasteX);
 		}
 		else
 		{
 			// DefaultEditorKit versions of menu commands
-			JMenuItem jmiCut   = new JMenuItem(new DefaultEditorKit.CutAction());   jmiCut.setText(Translatrix.getTranslationString("Cut"));             jmiCut.setAccelerator(KeyStroke.getKeyStroke('X', data.getCTRLKEY(), false));   if(showMenuIcons) { jmiCut.setIcon(getEkitIcon("Cut")); }     data.getjMenuEdit().add(jmiCut);
-			JMenuItem jmiCopy  = new JMenuItem(new DefaultEditorKit.CopyAction());  jmiCopy.setText(Translatrix.getTranslationString("Copy"));           jmiCopy.setAccelerator(KeyStroke.getKeyStroke('C', data.getCTRLKEY(), false));  if(showMenuIcons) { jmiCopy.setIcon(getEkitIcon("Copy")); }   data.getjMenuEdit().add(jmiCopy);
-			JMenuItem jmiPaste = new JMenuItem(new DefaultEditorKit.PasteAction()); jmiPaste.setText(Translatrix.getTranslationString("Paste"));         jmiPaste.setAccelerator(KeyStroke.getKeyStroke('V', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiPaste.setIcon(getEkitIcon("Paste")); } data.getjMenuEdit().add(jmiPaste);
-			JMenuItem jmiPasteX = new JMenuItem(Translatrix.getTranslationString("PasteUnformatted")); jmiPasteX.setActionCommand(CMD_CLIP_PASTE_PLAIN); jmiPasteX.addActionListener(this); jmiPasteX.setAccelerator(KeyStroke.getKeyStroke('V', data.getCTRLKEY() + KeyEvent.SHIFT_MASK, false)); if(showMenuIcons) { jmiPasteX.setIcon(getEkitIcon("PasteUnformatted")); } data.getjMenuEdit().add(jmiPasteX);
+			JMenuItem jmiCut   = new JMenuItem(new DefaultEditorKit.CutAction());   jmiCut.setText(Translatrix.getTranslationString("Cut"));             jmiCut.setAccelerator(KeyStroke.getKeyStroke('X', CTRLKEY, false));   if(showMenuIcons) { jmiCut.setIcon(getEkitIcon("Cut")); }     jMenuEdit.add(jmiCut);
+			JMenuItem jmiCopy  = new JMenuItem(new DefaultEditorKit.CopyAction());  jmiCopy.setText(Translatrix.getTranslationString("Copy"));           jmiCopy.setAccelerator(KeyStroke.getKeyStroke('C', CTRLKEY, false));  if(showMenuIcons) { jmiCopy.setIcon(getEkitIcon("Copy")); }   jMenuEdit.add(jmiCopy);
+			JMenuItem jmiPaste = new JMenuItem(new DefaultEditorKit.PasteAction()); jmiPaste.setText(Translatrix.getTranslationString("Paste"));         jmiPaste.setAccelerator(KeyStroke.getKeyStroke('V', CTRLKEY, false)); if(showMenuIcons) { jmiPaste.setIcon(getEkitIcon("Paste")); } jMenuEdit.add(jmiPaste);
+			JMenuItem jmiPasteX = new JMenuItem(Translatrix.getTranslationString("PasteUnformatted")); jmiPasteX.setActionCommand(CMD_CLIP_PASTE_PLAIN); jmiPasteX.addActionListener(this); jmiPasteX.setAccelerator(KeyStroke.getKeyStroke('V', CTRLKEY + KeyEvent.SHIFT_MASK, false)); if(showMenuIcons) { jmiPasteX.setIcon(getEkitIcon("PasteUnformatted")); } jMenuEdit.add(jmiPasteX);
 		}
-		data.getjMenuEdit().addSeparator();
-		JMenuItem jmiUndo    = new JMenuItem(data.getUndoAction()); jmiUndo.setAccelerator(KeyStroke.getKeyStroke('Z', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiUndo.setIcon(getEkitIcon("Undo")); } data.getjMenuEdit().add(jmiUndo);
-		JMenuItem jmiRedo    = new JMenuItem(data.getRedoAction()); jmiRedo.setAccelerator(KeyStroke.getKeyStroke('Y', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiRedo.setIcon(getEkitIcon("Redo")); } data.getjMenuEdit().add(jmiRedo);
-		data.getjMenuEdit().addSeparator();
-		JMenuItem jmiSelAll  = new JMenuItem((Action)actions.get(DefaultEditorKit.selectAllAction));       jmiSelAll.setText(Translatrix.getTranslationString("SelectAll"));        jmiSelAll.setAccelerator(KeyStroke.getKeyStroke('A', data.getCTRLKEY(), false)); data.getjMenuEdit().add(jmiSelAll);
-		JMenuItem jmiSelPara = new JMenuItem((Action)actions.get(DefaultEditorKit.selectParagraphAction)); jmiSelPara.setText(Translatrix.getTranslationString("SelectParagraph")); data.getjMenuEdit().add(jmiSelPara);
-		JMenuItem jmiSelLine = new JMenuItem((Action)actions.get(DefaultEditorKit.selectLineAction));      jmiSelLine.setText(Translatrix.getTranslationString("SelectLine"));      data.getjMenuEdit().add(jmiSelLine);
-		JMenuItem jmiSelWord = new JMenuItem((Action)actions.get(DefaultEditorKit.selectWordAction));      jmiSelWord.setText(Translatrix.getTranslationString("SelectWord"));      data.getjMenuEdit().add(jmiSelWord);
-		data.getjMenuEdit().addSeparator();
+		jMenuEdit.addSeparator();
+		JMenuItem jmiUndo    = new JMenuItem(undoAction); jmiUndo.setAccelerator(KeyStroke.getKeyStroke('Z', CTRLKEY, false)); if(showMenuIcons) { jmiUndo.setIcon(getEkitIcon("Undo")); } jMenuEdit.add(jmiUndo);
+		JMenuItem jmiRedo    = new JMenuItem(redoAction); jmiRedo.setAccelerator(KeyStroke.getKeyStroke('Y', CTRLKEY, false)); if(showMenuIcons) { jmiRedo.setIcon(getEkitIcon("Redo")); } jMenuEdit.add(jmiRedo);
+		jMenuEdit.addSeparator();
+		JMenuItem jmiSelAll  = new JMenuItem((Action)actions.get(DefaultEditorKit.selectAllAction));       jmiSelAll.setText(Translatrix.getTranslationString("SelectAll"));        jmiSelAll.setAccelerator(KeyStroke.getKeyStroke('A', CTRLKEY, false)); jMenuEdit.add(jmiSelAll);
+		JMenuItem jmiSelPara = new JMenuItem((Action)actions.get(DefaultEditorKit.selectParagraphAction)); jmiSelPara.setText(Translatrix.getTranslationString("SelectParagraph")); jMenuEdit.add(jmiSelPara);
+		JMenuItem jmiSelLine = new JMenuItem((Action)actions.get(DefaultEditorKit.selectLineAction));      jmiSelLine.setText(Translatrix.getTranslationString("SelectLine"));      jMenuEdit.add(jmiSelLine);
+		JMenuItem jmiSelWord = new JMenuItem((Action)actions.get(DefaultEditorKit.selectWordAction));      jmiSelWord.setText(Translatrix.getTranslationString("SelectWord"));      jMenuEdit.add(jmiSelWord);
+		jMenuEdit.addSeparator();
 		JMenu jMenuEnterKey  = new JMenu(Translatrix.getTranslationString("EnterKeyMenu"));
-		data.setJcbmiEnterKeyParag(new JCheckBoxMenuItem(Translatrix.getTranslationString("EnterKeyParag"), !data.isEnterIsBreak())); data.getJcbmiEnterKeyParag().setActionCommand(CMD_ENTER_PARAGRAPH); data.getJcbmiEnterKeyParag().addActionListener(this); jMenuEnterKey.add(data.getJcbmiEnterKeyParag());
-		data.setJcbmiEnterKeyBreak(new JCheckBoxMenuItem(Translatrix.getTranslationString("EnterKeyBreak"), data.isEnterIsBreak()));  data.getJcbmiEnterKeyBreak().setActionCommand(CMD_ENTER_BREAK);     data.getJcbmiEnterKeyBreak().addActionListener(this); jMenuEnterKey.add(data.getJcbmiEnterKeyBreak());
-		data.getjMenuEdit().add(jMenuEnterKey);
+		jcbmiEnterKeyParag   = new JCheckBoxMenuItem(Translatrix.getTranslationString("EnterKeyParag"), !enterIsBreak); jcbmiEnterKeyParag.setActionCommand(CMD_ENTER_PARAGRAPH); jcbmiEnterKeyParag.addActionListener(this); jMenuEnterKey.add(jcbmiEnterKeyParag);
+		jcbmiEnterKeyBreak   = new JCheckBoxMenuItem(Translatrix.getTranslationString("EnterKeyBreak"), enterIsBreak);  jcbmiEnterKeyBreak.setActionCommand(CMD_ENTER_BREAK);     jcbmiEnterKeyBreak.addActionListener(this); jMenuEnterKey.add(jcbmiEnterKeyBreak);
+		jMenuEdit.add(jMenuEnterKey);
 
 		/* VIEW Menu */
-		data.setjMenuView(new JMenu(Translatrix.getTranslationString("View")));
-		htMenus.put(KEY_MENU_VIEW, data.getjMenuView());
+		jMenuView = new JMenu(Translatrix.getTranslationString("View"));
+		htMenus.put(KEY_MENU_VIEW, jMenuView);
 		if(includeToolBar)
 		{
 			if(multiBar)
 			{
-				data.setjMenuToolbars(new JMenu(Translatrix.getTranslationString("ViewToolbars")));
+				jMenuToolbars = new JMenu(Translatrix.getTranslationString("ViewToolbars"));
 
-				data.setJcbmiViewToolbarMain(new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbarMain"), false));
-					data.getJcbmiViewToolbarMain().setActionCommand(CMD_TOGGLE_TOOLBAR_MAIN);
-					data.getJcbmiViewToolbarMain().addActionListener(this);
-					data.getjMenuToolbars().add(data.getJcbmiViewToolbarMain());
+				jcbmiViewToolbarMain = new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbarMain"), false);
+					jcbmiViewToolbarMain.setActionCommand(CMD_TOGGLE_TOOLBAR_MAIN);
+					jcbmiViewToolbarMain.addActionListener(this);
+					jMenuToolbars.add(jcbmiViewToolbarMain);
 
-				data.setJcbmiViewToolbarFormat(new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbarFormat"), false));
-					data.getJcbmiViewToolbarFormat().setActionCommand(CMD_TOGGLE_TOOLBAR_FORMAT);
-					data.getJcbmiViewToolbarFormat().addActionListener(this);
-					data.getjMenuToolbars().add(data.getJcbmiViewToolbarFormat());
+				jcbmiViewToolbarFormat = new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbarFormat"), false);
+					jcbmiViewToolbarFormat.setActionCommand(CMD_TOGGLE_TOOLBAR_FORMAT);
+					jcbmiViewToolbarFormat.addActionListener(this);
+					jMenuToolbars.add(jcbmiViewToolbarFormat);
 
-				data.setJcbmiViewToolbarStyles(new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbarStyles"), false));
-					data.getJcbmiViewToolbarStyles().setActionCommand(CMD_TOGGLE_TOOLBAR_STYLES);
-					data.getJcbmiViewToolbarStyles().addActionListener(this);
-					data.getjMenuToolbars().add(data.getJcbmiViewToolbarStyles());
+				jcbmiViewToolbarStyles = new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbarStyles"), false);
+					jcbmiViewToolbarStyles.setActionCommand(CMD_TOGGLE_TOOLBAR_STYLES);
+					jcbmiViewToolbarStyles.addActionListener(this);
+					jMenuToolbars.add(jcbmiViewToolbarStyles);
 
-				data.getjMenuView().add(data.getjMenuToolbars());
+				jMenuView.add(jMenuToolbars);
 			}
 			else
 			{
-				data.setJcbmiViewToolbar(new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbar"), false));
-					data.getJcbmiViewToolbar().setActionCommand(CMD_TOGGLE_TOOLBAR_SINGLE);
-					data.getJcbmiViewToolbar().addActionListener(this);
+				jcbmiViewToolbar = new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewToolbar"), false);
+					jcbmiViewToolbar.setActionCommand(CMD_TOGGLE_TOOLBAR_SINGLE);
+					jcbmiViewToolbar.addActionListener(this);
 
-				data.getjMenuView().add(data.getJcbmiViewToolbar());
+				jMenuView.add(jcbmiViewToolbar);
 			}
 		}
-		data.setJcbmiViewSource(new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewSource"), false));  data.getJcbmiViewSource().setActionCommand(CMD_TOGGLE_SOURCE_VIEW);     data.getJcbmiViewSource().addActionListener(this);  data.getjMenuView().add(data.getJcbmiViewSource());
+		jcbmiViewSource = new JCheckBoxMenuItem(Translatrix.getTranslationString("ViewSource"), false);  jcbmiViewSource.setActionCommand(CMD_TOGGLE_SOURCE_VIEW);     jcbmiViewSource.addActionListener(this);  jMenuView.add(jcbmiViewSource);
 
 		/* FONT Menu */
-		data.setjMenuFont(new JMenu(Translatrix.getTranslationString("Font")));
-		htMenus.put(KEY_MENU_FONT, data.getjMenuFont());
-		JMenuItem jmiBold      = new JMenuItem(data.getActionFontBold());      jmiBold.setText(Translatrix.getTranslationString("FontBold"));           jmiBold.setAccelerator(KeyStroke.getKeyStroke('B', data.getCTRLKEY(), false));      if(showMenuIcons) { jmiBold.setIcon(getEkitIcon("Bold")); }           data.getjMenuFont().add(jmiBold);
-		JMenuItem jmiItalic    = new JMenuItem(data.getActionFontItalic());    jmiItalic.setText(Translatrix.getTranslationString("FontItalic"));       jmiItalic.setAccelerator(KeyStroke.getKeyStroke('I', data.getCTRLKEY(), false));    if(showMenuIcons) { jmiItalic.setIcon(getEkitIcon("Italic")); }       data.getjMenuFont().add(jmiItalic);
-		JMenuItem jmiUnderline = new JMenuItem(data.getActionFontUnderline()); jmiUnderline.setText(Translatrix.getTranslationString("FontUnderline")); jmiUnderline.setAccelerator(KeyStroke.getKeyStroke('U', data.getCTRLKEY(), false)); if(showMenuIcons) { jmiUnderline.setIcon(getEkitIcon("Underline")); } data.getjMenuFont().add(jmiUnderline);
-		JMenuItem jmiStrike    = new JMenuItem(data.getActionFontStrike());    jmiStrike.setText(Translatrix.getTranslationString("FontStrike"));                                                                                 if(showMenuIcons) { jmiStrike.setIcon(getEkitIcon("Strike")); }       data.getjMenuFont().add(jmiStrike);
-		JMenuItem jmiSupscript = new JMenuItem(data.getActionFontSuperscript()); if(showMenuIcons) { jmiSupscript.setIcon(getEkitIcon("Super")); } data.getjMenuFont().add(jmiSupscript);
-		JMenuItem jmiSubscript = new JMenuItem(data.getActionFontSubscript());   if(showMenuIcons) { jmiSubscript.setIcon(getEkitIcon("Sub")); }   data.getjMenuFont().add(jmiSubscript);
-		data.getjMenuFont().addSeparator();
-		data.getjMenuFont().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatBig"), HTML.Tag.BIG)));
-		data.getjMenuFont().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatSmall"), HTML.Tag.SMALL)));
+		jMenuFont              = new JMenu(Translatrix.getTranslationString("Font"));
+		htMenus.put(KEY_MENU_FONT, jMenuFont);
+		JMenuItem jmiBold      = new JMenuItem(actionFontBold);      jmiBold.setText(Translatrix.getTranslationString("FontBold"));           jmiBold.setAccelerator(KeyStroke.getKeyStroke('B', CTRLKEY, false));      if(showMenuIcons) { jmiBold.setIcon(getEkitIcon("Bold")); }           jMenuFont.add(jmiBold);
+		JMenuItem jmiItalic    = new JMenuItem(actionFontItalic);    jmiItalic.setText(Translatrix.getTranslationString("FontItalic"));       jmiItalic.setAccelerator(KeyStroke.getKeyStroke('I', CTRLKEY, false));    if(showMenuIcons) { jmiItalic.setIcon(getEkitIcon("Italic")); }       jMenuFont.add(jmiItalic);
+		JMenuItem jmiUnderline = new JMenuItem(actionFontUnderline); jmiUnderline.setText(Translatrix.getTranslationString("FontUnderline")); jmiUnderline.setAccelerator(KeyStroke.getKeyStroke('U', CTRLKEY, false)); if(showMenuIcons) { jmiUnderline.setIcon(getEkitIcon("Underline")); } jMenuFont.add(jmiUnderline);
+		JMenuItem jmiStrike    = new JMenuItem(actionFontStrike);    jmiStrike.setText(Translatrix.getTranslationString("FontStrike"));                                                                                 if(showMenuIcons) { jmiStrike.setIcon(getEkitIcon("Strike")); }       jMenuFont.add(jmiStrike);
+		JMenuItem jmiSupscript = new JMenuItem(actionFontSuperscript); if(showMenuIcons) { jmiSupscript.setIcon(getEkitIcon("Super")); } jMenuFont.add(jmiSupscript);
+		JMenuItem jmiSubscript = new JMenuItem(actionFontSubscript);   if(showMenuIcons) { jmiSubscript.setIcon(getEkitIcon("Sub")); }   jMenuFont.add(jmiSubscript);
+		jMenuFont.addSeparator();
+		jMenuFont.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatBig"), HTML.Tag.BIG)));
+		jMenuFont.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatSmall"), HTML.Tag.SMALL)));
 		JMenu jMenuFontSize = new JMenu(Translatrix.getTranslationString("FontSize"));
 			jMenuFontSize.add(new JMenuItem(new StyledEditorKit.FontSizeAction(Translatrix.getTranslationString("FontSize1"), 8)));
 			jMenuFontSize.add(new JMenuItem(new StyledEditorKit.FontSizeAction(Translatrix.getTranslationString("FontSize2"), 10)));
@@ -603,18 +740,18 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			jMenuFontSize.add(new JMenuItem(new StyledEditorKit.FontSizeAction(Translatrix.getTranslationString("FontSize5"), 18)));
 			jMenuFontSize.add(new JMenuItem(new StyledEditorKit.FontSizeAction(Translatrix.getTranslationString("FontSize6"), 24)));
 			jMenuFontSize.add(new JMenuItem(new StyledEditorKit.FontSizeAction(Translatrix.getTranslationString("FontSize7"), 32)));
-		data.getjMenuFont().add(jMenuFontSize);
-		data.getjMenuFont().addSeparator();
+		jMenuFont.add(jMenuFontSize);
+		jMenuFont.addSeparator();
 		JMenu jMenuFontSub      = new JMenu(Translatrix.getTranslationString("Font"));
-		JMenuItem jmiSelectFont = new JMenuItem(data.getActionSelectFont());                              jmiSelectFont.setText(Translatrix.getTranslationString("FontSelect") + data.getMenuDialog()); if(showMenuIcons) { jmiSelectFont.setIcon(getEkitIcon("FontFaces")); }      jMenuFontSub.add(jmiSelectFont);
+		JMenuItem jmiSelectFont = new JMenuItem(actionSelectFont);                              jmiSelectFont.setText(Translatrix.getTranslationString("FontSelect") + menuDialog); if(showMenuIcons) { jmiSelectFont.setIcon(getEkitIcon("FontFaces")); }      jMenuFontSub.add(jmiSelectFont);
 		JMenuItem jmiSerif      = new JMenuItem((Action)actions.get("font-family-Serif"));      jmiSerif.setText(Translatrix.getTranslationString("FontSerif"));                    jMenuFontSub.add(jmiSerif);
 		JMenuItem jmiSansSerif  = new JMenuItem((Action)actions.get("font-family-SansSerif"));  jmiSansSerif.setText(Translatrix.getTranslationString("FontSansserif"));            jMenuFontSub.add(jmiSansSerif);
 		JMenuItem jmiMonospaced = new JMenuItem((Action)actions.get("font-family-Monospaced")); jmiMonospaced.setText(Translatrix.getTranslationString("FontMonospaced"));          jMenuFontSub.add(jmiMonospaced);
-		data.getjMenuFont().add(jMenuFontSub);
-		data.getjMenuFont().addSeparator();
+		jMenuFont.add(jMenuFontSub);
+		jMenuFont.addSeparator();
 		JMenu jMenuFontColor = new JMenu(Translatrix.getTranslationString("Color"));
 			Hashtable<String, String> customAttr = new Hashtable<String, String>(); customAttr.put("color", "black");
-			jMenuFontColor.add(new JMenuItem(new CustomAction(this, Translatrix.getTranslationString("CustomColor") + data.getMenuDialog(), HTML.Tag.FONT, customAttr)));
+			jMenuFontColor.add(new JMenuItem(new CustomAction(this, Translatrix.getTranslationString("CustomColor") + menuDialog, HTML.Tag.FONT, customAttr)));
 			jMenuFontColor.add(new JMenuItem(new StyledEditorKit.ForegroundAction(Translatrix.getTranslationString("ColorAqua"),    new Color(  0,255,255))));
 			jMenuFontColor.add(new JMenuItem(new StyledEditorKit.ForegroundAction(Translatrix.getTranslationString("ColorBlack"),   new Color(  0,  0,  0))));
 			jMenuFontColor.add(new JMenuItem(new StyledEditorKit.ForegroundAction(Translatrix.getTranslationString("ColorBlue"),    new Color(  0,  0,255))));
@@ -631,18 +768,18 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			jMenuFontColor.add(new JMenuItem(new StyledEditorKit.ForegroundAction(Translatrix.getTranslationString("ColorTeal"),    new Color(  0,128,128))));
 			jMenuFontColor.add(new JMenuItem(new StyledEditorKit.ForegroundAction(Translatrix.getTranslationString("ColorWhite"),   new Color(255,255,255))));
 			jMenuFontColor.add(new JMenuItem(new StyledEditorKit.ForegroundAction(Translatrix.getTranslationString("ColorYellow"),  new Color(255,255,  0))));
-		data.getjMenuFont().add(jMenuFontColor);
+		jMenuFont.add(jMenuFontColor);
 
 		/* FORMAT Menu */
-		data.setjMenuFormat(new JMenu(Translatrix.getTranslationString("Format")));
-		htMenus.put(KEY_MENU_FORMAT, data.getjMenuFormat());
+		jMenuFormat            = new JMenu(Translatrix.getTranslationString("Format"));
+		htMenus.put(KEY_MENU_FORMAT, jMenuFormat);
 		JMenu jMenuFormatAlign = new JMenu(Translatrix.getTranslationString("Align"));
-			JMenuItem jmiAlignLeft = new JMenuItem(data.getActionAlignLeft());           if(showMenuIcons) { jmiAlignLeft.setIcon(getEkitIcon("AlignLeft")); };           jMenuFormatAlign.add(jmiAlignLeft);
-			JMenuItem jmiAlignCenter = new JMenuItem(data.getActionAlignCenter());       if(showMenuIcons) { jmiAlignCenter.setIcon(getEkitIcon("AlignCenter")); };       jMenuFormatAlign.add(jmiAlignCenter);
-			JMenuItem jmiAlignRight = new JMenuItem(data.getActionAlignRight());         if(showMenuIcons) { jmiAlignRight.setIcon(getEkitIcon("AlignRight")); };         jMenuFormatAlign.add(jmiAlignRight);
-			JMenuItem jmiAlignJustified = new JMenuItem(data.getActionAlignJustified()); if(showMenuIcons) { jmiAlignJustified.setIcon(getEkitIcon("AlignJustified")); }; jMenuFormatAlign.add(jmiAlignJustified);
-		data.getjMenuFormat().add(jMenuFormatAlign);
-		data.getjMenuFormat().addSeparator();
+			JMenuItem jmiAlignLeft = new JMenuItem(actionAlignLeft);           if(showMenuIcons) { jmiAlignLeft.setIcon(getEkitIcon("AlignLeft")); };           jMenuFormatAlign.add(jmiAlignLeft);
+			JMenuItem jmiAlignCenter = new JMenuItem(actionAlignCenter);       if(showMenuIcons) { jmiAlignCenter.setIcon(getEkitIcon("AlignCenter")); };       jMenuFormatAlign.add(jmiAlignCenter);
+			JMenuItem jmiAlignRight = new JMenuItem(actionAlignRight);         if(showMenuIcons) { jmiAlignRight.setIcon(getEkitIcon("AlignRight")); };         jMenuFormatAlign.add(jmiAlignRight);
+			JMenuItem jmiAlignJustified = new JMenuItem(actionAlignJustified); if(showMenuIcons) { jmiAlignJustified.setIcon(getEkitIcon("AlignJustified")); }; jMenuFormatAlign.add(jmiAlignJustified);
+		jMenuFormat.add(jMenuFormatAlign);
+		jMenuFormat.addSeparator();
 		JMenu jMenuFormatHeading = new JMenu(Translatrix.getTranslationString("Heading"));
 			jMenuFormatHeading.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("Heading1"), HTML.Tag.H1)));
 			jMenuFormatHeading.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("Heading2"), HTML.Tag.H2)));
@@ -650,297 +787,297 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			jMenuFormatHeading.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("Heading4"), HTML.Tag.H4)));
 			jMenuFormatHeading.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("Heading5"), HTML.Tag.H5)));
 			jMenuFormatHeading.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("Heading6"), HTML.Tag.H6)));
-		data.getjMenuFormat().add(jMenuFormatHeading);
-		data.getjMenuFormat().addSeparator();
-		JMenuItem jmiUList = new JMenuItem(data.getActionListUnordered()); if(showMenuIcons) { jmiUList.setIcon(getEkitIcon("UList")); } data.getjMenuFormat().add(jmiUList);
-		JMenuItem jmiOList = new JMenuItem(data.getActionListOrdered());   if(showMenuIcons) { jmiOList.setIcon(getEkitIcon("OList")); } data.getjMenuFormat().add(jmiOList);
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("ListItem"), HTML.Tag.LI)));
-		data.getjMenuFormat().addSeparator();
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatBlockquote"), HTML.Tag.BLOCKQUOTE)));
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatPre"), HTML.Tag.PRE)));
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatStrong"), HTML.Tag.STRONG)));
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatEmphasis"), HTML.Tag.EM)));
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatTT"), HTML.Tag.TT)));
-		data.getjMenuFormat().add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatSpan"), HTML.Tag.SPAN)));
+		jMenuFormat.add(jMenuFormatHeading);
+		jMenuFormat.addSeparator();
+		JMenuItem jmiUList = new JMenuItem(actionListUnordered); if(showMenuIcons) { jmiUList.setIcon(getEkitIcon("UList")); } jMenuFormat.add(jmiUList);
+		JMenuItem jmiOList = new JMenuItem(actionListOrdered);   if(showMenuIcons) { jmiOList.setIcon(getEkitIcon("OList")); } jMenuFormat.add(jmiOList);
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("ListItem"), HTML.Tag.LI)));
+		jMenuFormat.addSeparator();
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatBlockquote"), HTML.Tag.BLOCKQUOTE)));
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatPre"), HTML.Tag.PRE)));
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatStrong"), HTML.Tag.STRONG)));
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatEmphasis"), HTML.Tag.EM)));
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatTT"), HTML.Tag.TT)));
+		jMenuFormat.add(new JMenuItem(new FormatAction(this, Translatrix.getTranslationString("FormatSpan"), HTML.Tag.SPAN)));
 
 		/* INSERT Menu */
-		data.setjMenuInsert(new JMenu(Translatrix.getTranslationString("Insert")));
-		htMenus.put(KEY_MENU_INSERT, data.getjMenuInsert());
-		JMenuItem jmiInsertAnchor = new JMenuItem(data.getActionInsertAnchor()); if(showMenuIcons) { jmiInsertAnchor.setIcon(getEkitIcon("Anchor")); }; data.getjMenuInsert().add(jmiInsertAnchor);
-		JMenuItem jmiBreak        = new JMenuItem(Translatrix.getTranslationString("InsertBreak"));  jmiBreak.setActionCommand(CMD_INSERT_BREAK);   jmiBreak.addActionListener(this);   jmiBreak.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_MASK, false)); data.getjMenuInsert().add(jmiBreak);
-		JMenuItem jmiNBSP         = new JMenuItem(Translatrix.getTranslationString("InsertNBSP"));   jmiNBSP.setActionCommand(CMD_INSERT_NBSP);     jmiNBSP.addActionListener(this);    jmiNBSP.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, KeyEvent.SHIFT_MASK, false)); data.getjMenuInsert().add(jmiNBSP);
+		jMenuInsert               = new JMenu(Translatrix.getTranslationString("Insert"));
+		htMenus.put(KEY_MENU_INSERT, jMenuInsert);
+		JMenuItem jmiInsertAnchor = new JMenuItem(actionInsertAnchor); if(showMenuIcons) { jmiInsertAnchor.setIcon(getEkitIcon("Anchor")); }; jMenuInsert.add(jmiInsertAnchor);
+		JMenuItem jmiBreak        = new JMenuItem(Translatrix.getTranslationString("InsertBreak"));  jmiBreak.setActionCommand(CMD_INSERT_BREAK);   jmiBreak.addActionListener(this);   jmiBreak.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_MASK, false)); jMenuInsert.add(jmiBreak);
+		JMenuItem jmiNBSP         = new JMenuItem(Translatrix.getTranslationString("InsertNBSP"));   jmiNBSP.setActionCommand(CMD_INSERT_NBSP);     jmiNBSP.addActionListener(this);    jmiNBSP.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, KeyEvent.SHIFT_MASK, false)); jMenuInsert.add(jmiNBSP);
 		JMenu jMenuUnicode        = new JMenu(Translatrix.getTranslationString("InsertUnicodeCharacter")); if(showMenuIcons) { jMenuUnicode.setIcon(getEkitIcon("Unicode")); };
-		JMenuItem jmiUnicodeAll   = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterAll") + data.getMenuDialog());  if(showMenuIcons) { jmiUnicodeAll.setIcon(getEkitIcon("Unicode")); }; jmiUnicodeAll.setActionCommand(CMD_INSERT_UNICODE_CHAR);      jmiUnicodeAll.addActionListener(this);   jMenuUnicode.add(jmiUnicodeAll);
-		JMenuItem jmiUnicodeMath  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterMath") + data.getMenuDialog()); if(showMenuIcons) { jmiUnicodeMath.setIcon(getEkitIcon("Math")); };   jmiUnicodeMath.setActionCommand(CMD_INSERT_UNICODE_MATH); jmiUnicodeMath.addActionListener(this);  jMenuUnicode.add(jmiUnicodeMath);
-		JMenuItem jmiUnicodeDraw  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterDraw") + data.getMenuDialog()); if(showMenuIcons) { jmiUnicodeDraw.setIcon(getEkitIcon("Draw")); };   jmiUnicodeDraw.setActionCommand(CMD_INSERT_UNICODE_DRAW); jmiUnicodeDraw.addActionListener(this);  jMenuUnicode.add(jmiUnicodeDraw);
-		JMenuItem jmiUnicodeDing  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterDing") + data.getMenuDialog()); jmiUnicodeDing.setActionCommand(CMD_INSERT_UNICODE_DING); jmiUnicodeDing.addActionListener(this);  jMenuUnicode.add(jmiUnicodeDing);
-		JMenuItem jmiUnicodeSigs  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterSigs") + data.getMenuDialog()); jmiUnicodeSigs.setActionCommand(CMD_INSERT_UNICODE_SIGS); jmiUnicodeSigs.addActionListener(this);  jMenuUnicode.add(jmiUnicodeSigs);
-		JMenuItem jmiUnicodeSpec  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterSpec") + data.getMenuDialog()); jmiUnicodeSpec.setActionCommand(CMD_INSERT_UNICODE_SPEC); jmiUnicodeSpec.addActionListener(this);  jMenuUnicode.add(jmiUnicodeSpec);
-		data.getjMenuInsert().add(jMenuUnicode);
-		JMenuItem jmiHRule        = new JMenuItem(Translatrix.getTranslationString("InsertHorizontalRule")); jmiHRule.setActionCommand(CMD_INSERT_HR); jmiHRule.addActionListener(this); data.getjMenuInsert().add(jmiHRule);
-		data.getjMenuInsert().addSeparator();
+		JMenuItem jmiUnicodeAll   = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterAll") + menuDialog);  if(showMenuIcons) { jmiUnicodeAll.setIcon(getEkitIcon("Unicode")); }; jmiUnicodeAll.setActionCommand(CMD_INSERT_UNICODE_CHAR);      jmiUnicodeAll.addActionListener(this);   jMenuUnicode.add(jmiUnicodeAll);
+		JMenuItem jmiUnicodeMath  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterMath") + menuDialog); if(showMenuIcons) { jmiUnicodeMath.setIcon(getEkitIcon("Math")); };   jmiUnicodeMath.setActionCommand(CMD_INSERT_UNICODE_MATH); jmiUnicodeMath.addActionListener(this);  jMenuUnicode.add(jmiUnicodeMath);
+		JMenuItem jmiUnicodeDraw  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterDraw") + menuDialog); if(showMenuIcons) { jmiUnicodeDraw.setIcon(getEkitIcon("Draw")); };   jmiUnicodeDraw.setActionCommand(CMD_INSERT_UNICODE_DRAW); jmiUnicodeDraw.addActionListener(this);  jMenuUnicode.add(jmiUnicodeDraw);
+		JMenuItem jmiUnicodeDing  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterDing") + menuDialog); jmiUnicodeDing.setActionCommand(CMD_INSERT_UNICODE_DING); jmiUnicodeDing.addActionListener(this);  jMenuUnicode.add(jmiUnicodeDing);
+		JMenuItem jmiUnicodeSigs  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterSigs") + menuDialog); jmiUnicodeSigs.setActionCommand(CMD_INSERT_UNICODE_SIGS); jmiUnicodeSigs.addActionListener(this);  jMenuUnicode.add(jmiUnicodeSigs);
+		JMenuItem jmiUnicodeSpec  = new JMenuItem(Translatrix.getTranslationString("InsertUnicodeCharacterSpec") + menuDialog); jmiUnicodeSpec.setActionCommand(CMD_INSERT_UNICODE_SPEC); jmiUnicodeSpec.addActionListener(this);  jMenuUnicode.add(jmiUnicodeSpec);
+		jMenuInsert.add(jMenuUnicode);
+		JMenuItem jmiHRule        = new JMenuItem(Translatrix.getTranslationString("InsertHorizontalRule")); jmiHRule.setActionCommand(CMD_INSERT_HR); jmiHRule.addActionListener(this); jMenuInsert.add(jmiHRule);
+		jMenuInsert.addSeparator();
 		if(!isParentApplet)
 		{
-			JMenuItem jmiImageLocal = new JMenuItem(Translatrix.getTranslationString("InsertLocalImage") + data.getMenuDialog());  jmiImageLocal.setActionCommand(CMD_INSERT_IMAGE_LOCAL); jmiImageLocal.addActionListener(this); data.getjMenuInsert().add(jmiImageLocal);
+			JMenuItem jmiImageLocal = new JMenuItem(Translatrix.getTranslationString("InsertLocalImage") + menuDialog);  jmiImageLocal.setActionCommand(CMD_INSERT_IMAGE_LOCAL); jmiImageLocal.addActionListener(this); jMenuInsert.add(jmiImageLocal);
 		}
-		JMenuItem jmiImageURL     = new JMenuItem(Translatrix.getTranslationString("InsertURLImage") + data.getMenuDialog());    jmiImageURL.setActionCommand(CMD_INSERT_IMAGE_URL);     jmiImageURL.addActionListener(this);   data.getjMenuInsert().add(jmiImageURL);
+		JMenuItem jmiImageURL     = new JMenuItem(Translatrix.getTranslationString("InsertURLImage") + menuDialog);    jmiImageURL.setActionCommand(CMD_INSERT_IMAGE_URL);     jmiImageURL.addActionListener(this);   jMenuInsert.add(jmiImageURL);
 
 		/* TABLE Menu */
-		data.setjMenuTable(new JMenu(Translatrix.getTranslationString("Table")));
-		htMenus.put(KEY_MENU_TABLE, data.getjMenuTable());
-		JMenuItem jmiTable       = new JMenuItem(Translatrix.getTranslationString("InsertTable") + data.getMenuDialog()); if(showMenuIcons) { jmiTable.setIcon(getEkitIcon("TableCreate")); }; jmiTable.setActionCommand(CMD_TABLE_INSERT);             jmiTable.addActionListener(this);       data.getjMenuTable().add(jmiTable);
-		data.getjMenuTable().addSeparator();
-		JMenuItem jmiEditTable	 = new JMenuItem(Translatrix.getTranslationString("TableEdit") + data.getMenuDialog()); if(showMenuIcons) { jmiEditTable.setIcon(getEkitIcon("TableEdit")); } jmiEditTable.setActionCommand(CMD_TABLE_EDIT);	jmiEditTable.addActionListener(this);	data.getjMenuTable().add(jmiEditTable);
-		JMenuItem jmiEditCell	 = new JMenuItem(Translatrix.getTranslationString("TableCellEdit") + data.getMenuDialog()); if(showMenuIcons) { jmiEditCell.setIcon(getEkitIcon("CellEdit")); } jmiEditCell.setActionCommand(CMD_TABLE_CELL_EDIT);	jmiEditCell.addActionListener(this);	data.getjMenuTable().add(jmiEditCell);
-		data.getjMenuTable().addSeparator();
-		JMenuItem jmiTableRow    = new JMenuItem(Translatrix.getTranslationString("InsertTableRow"));           if(showMenuIcons) { jmiTableRow.setIcon(getEkitIcon("InsertRow")); }; jmiTableRow.setActionCommand(CMD_TABLE_ROW_INSERT);       jmiTableRow.addActionListener(this);    data.getjMenuTable().add(jmiTableRow);
-		JMenuItem jmiTableCol    = new JMenuItem(Translatrix.getTranslationString("InsertTableColumn"));        if(showMenuIcons) { jmiTableCol.setIcon(getEkitIcon("InsertColumn")); }; jmiTableCol.setActionCommand(CMD_TABLE_COLUMN_INSERT);    jmiTableCol.addActionListener(this);    data.getjMenuTable().add(jmiTableCol);
-		data.getjMenuTable().addSeparator();
-		JMenuItem jmiTableRowDel = new JMenuItem(Translatrix.getTranslationString("DeleteTableRow"));           if(showMenuIcons) { jmiTableRowDel.setIcon(getEkitIcon("DeleteRow")); }; jmiTableRowDel.setActionCommand(CMD_TABLE_ROW_DELETE);    jmiTableRowDel.addActionListener(this); data.getjMenuTable().add(jmiTableRowDel);
-		JMenuItem jmiTableColDel = new JMenuItem(Translatrix.getTranslationString("DeleteTableColumn"));        if(showMenuIcons) { jmiTableColDel.setIcon(getEkitIcon("DeleteColumn")); }; jmiTableColDel.setActionCommand(CMD_TABLE_COLUMN_DELETE); jmiTableColDel.addActionListener(this); data.getjMenuTable().add(jmiTableColDel);
+		jMenuTable              = new JMenu(Translatrix.getTranslationString("Table"));
+		htMenus.put(KEY_MENU_TABLE, jMenuTable);
+		JMenuItem jmiTable       = new JMenuItem(Translatrix.getTranslationString("InsertTable") + menuDialog); if(showMenuIcons) { jmiTable.setIcon(getEkitIcon("TableCreate")); }; jmiTable.setActionCommand(CMD_TABLE_INSERT);             jmiTable.addActionListener(this);       jMenuTable.add(jmiTable);
+		jMenuTable.addSeparator();
+		JMenuItem jmiEditTable	 = new JMenuItem(Translatrix.getTranslationString("TableEdit") + menuDialog); if(showMenuIcons) { jmiEditTable.setIcon(getEkitIcon("TableEdit")); } jmiEditTable.setActionCommand(CMD_TABLE_EDIT);	jmiEditTable.addActionListener(this);	jMenuTable.add(jmiEditTable);
+		JMenuItem jmiEditCell	 = new JMenuItem(Translatrix.getTranslationString("TableCellEdit") + menuDialog); if(showMenuIcons) { jmiEditCell.setIcon(getEkitIcon("CellEdit")); } jmiEditCell.setActionCommand(CMD_TABLE_CELL_EDIT);	jmiEditCell.addActionListener(this);	jMenuTable.add(jmiEditCell);
+		jMenuTable.addSeparator();
+		JMenuItem jmiTableRow    = new JMenuItem(Translatrix.getTranslationString("InsertTableRow"));           if(showMenuIcons) { jmiTableRow.setIcon(getEkitIcon("InsertRow")); }; jmiTableRow.setActionCommand(CMD_TABLE_ROW_INSERT);       jmiTableRow.addActionListener(this);    jMenuTable.add(jmiTableRow);
+		JMenuItem jmiTableCol    = new JMenuItem(Translatrix.getTranslationString("InsertTableColumn"));        if(showMenuIcons) { jmiTableCol.setIcon(getEkitIcon("InsertColumn")); }; jmiTableCol.setActionCommand(CMD_TABLE_COLUMN_INSERT);    jmiTableCol.addActionListener(this);    jMenuTable.add(jmiTableCol);
+		jMenuTable.addSeparator();
+		JMenuItem jmiTableRowDel = new JMenuItem(Translatrix.getTranslationString("DeleteTableRow"));           if(showMenuIcons) { jmiTableRowDel.setIcon(getEkitIcon("DeleteRow")); }; jmiTableRowDel.setActionCommand(CMD_TABLE_ROW_DELETE);    jmiTableRowDel.addActionListener(this); jMenuTable.add(jmiTableRowDel);
+		JMenuItem jmiTableColDel = new JMenuItem(Translatrix.getTranslationString("DeleteTableColumn"));        if(showMenuIcons) { jmiTableColDel.setIcon(getEkitIcon("DeleteColumn")); }; jmiTableColDel.setActionCommand(CMD_TABLE_COLUMN_DELETE); jmiTableColDel.addActionListener(this); jMenuTable.add(jmiTableColDel);
 
 		/* FORMS Menu */
-		data.setjMenuForms(new JMenu(Translatrix.getTranslationString("Forms")));
-		htMenus.put(KEY_MENU_FORMS, data.getjMenuForms());
-		JMenuItem jmiFormInsertForm   = new JMenuItem(Translatrix.getTranslationString("FormInsertForm")); jmiFormInsertForm.setActionCommand(CMD_FORM_INSERT);     jmiFormInsertForm.addActionListener(this); data.getjMenuForms().add(jmiFormInsertForm);
-		data.getjMenuForms().addSeparator();
-		JMenuItem jmiFormTextfield    = new JMenuItem(Translatrix.getTranslationString("FormTextfield"));  jmiFormTextfield.setActionCommand(CMD_FORM_TEXTFIELD); jmiFormTextfield.addActionListener(this);  data.getjMenuForms().add(jmiFormTextfield);
-		JMenuItem jmiFormTextarea     = new JMenuItem(Translatrix.getTranslationString("FormTextarea"));   jmiFormTextarea.setActionCommand(CMD_FORM_TEXTAREA);   jmiFormTextarea.addActionListener(this);   data.getjMenuForms().add(jmiFormTextarea);
-		JMenuItem jmiFormCheckbox     = new JMenuItem(Translatrix.getTranslationString("FormCheckbox"));   jmiFormCheckbox.setActionCommand(CMD_FORM_CHECKBOX);   jmiFormCheckbox.addActionListener(this);   data.getjMenuForms().add(jmiFormCheckbox);
-		JMenuItem jmiFormRadio        = new JMenuItem(Translatrix.getTranslationString("FormRadio"));      jmiFormRadio.setActionCommand(CMD_FORM_RADIO);   jmiFormRadio.addActionListener(this);      data.getjMenuForms().add(jmiFormRadio);
-		JMenuItem jmiFormPassword     = new JMenuItem(Translatrix.getTranslationString("FormPassword"));   jmiFormPassword.setActionCommand(CMD_FORM_PASSWORD);   jmiFormPassword.addActionListener(this);   data.getjMenuForms().add(jmiFormPassword);
-		data.getjMenuForms().addSeparator();
-		JMenuItem jmiFormButton       = new JMenuItem(Translatrix.getTranslationString("FormButton"));       jmiFormButton.setActionCommand(CMD_FORM_BUTTON);             jmiFormButton.addActionListener(this);       data.getjMenuForms().add(jmiFormButton);
-		JMenuItem jmiFormButtonSubmit = new JMenuItem(Translatrix.getTranslationString("FormButtonSubmit")); jmiFormButtonSubmit.setActionCommand(CMD_FORM_SUBMIT); jmiFormButtonSubmit.addActionListener(this); data.getjMenuForms().add(jmiFormButtonSubmit);
-		JMenuItem jmiFormButtonReset  = new JMenuItem(Translatrix.getTranslationString("FormButtonReset"));  jmiFormButtonReset.setActionCommand(CMD_FORM_RESET);   jmiFormButtonReset.addActionListener(this);  data.getjMenuForms().add(jmiFormButtonReset);
+		jMenuForms                    = new JMenu(Translatrix.getTranslationString("Forms"));
+		htMenus.put(KEY_MENU_FORMS, jMenuForms);
+		JMenuItem jmiFormInsertForm   = new JMenuItem(Translatrix.getTranslationString("FormInsertForm")); jmiFormInsertForm.setActionCommand(CMD_FORM_INSERT);     jmiFormInsertForm.addActionListener(this); jMenuForms.add(jmiFormInsertForm);
+		jMenuForms.addSeparator();
+		JMenuItem jmiFormTextfield    = new JMenuItem(Translatrix.getTranslationString("FormTextfield"));  jmiFormTextfield.setActionCommand(CMD_FORM_TEXTFIELD); jmiFormTextfield.addActionListener(this);  jMenuForms.add(jmiFormTextfield);
+		JMenuItem jmiFormTextarea     = new JMenuItem(Translatrix.getTranslationString("FormTextarea"));   jmiFormTextarea.setActionCommand(CMD_FORM_TEXTAREA);   jmiFormTextarea.addActionListener(this);   jMenuForms.add(jmiFormTextarea);
+		JMenuItem jmiFormCheckbox     = new JMenuItem(Translatrix.getTranslationString("FormCheckbox"));   jmiFormCheckbox.setActionCommand(CMD_FORM_CHECKBOX);   jmiFormCheckbox.addActionListener(this);   jMenuForms.add(jmiFormCheckbox);
+		JMenuItem jmiFormRadio        = new JMenuItem(Translatrix.getTranslationString("FormRadio"));      jmiFormRadio.setActionCommand(CMD_FORM_RADIO);   jmiFormRadio.addActionListener(this);      jMenuForms.add(jmiFormRadio);
+		JMenuItem jmiFormPassword     = new JMenuItem(Translatrix.getTranslationString("FormPassword"));   jmiFormPassword.setActionCommand(CMD_FORM_PASSWORD);   jmiFormPassword.addActionListener(this);   jMenuForms.add(jmiFormPassword);
+		jMenuForms.addSeparator();
+		JMenuItem jmiFormButton       = new JMenuItem(Translatrix.getTranslationString("FormButton"));       jmiFormButton.setActionCommand(CMD_FORM_BUTTON);             jmiFormButton.addActionListener(this);       jMenuForms.add(jmiFormButton);
+		JMenuItem jmiFormButtonSubmit = new JMenuItem(Translatrix.getTranslationString("FormButtonSubmit")); jmiFormButtonSubmit.setActionCommand(CMD_FORM_SUBMIT); jmiFormButtonSubmit.addActionListener(this); jMenuForms.add(jmiFormButtonSubmit);
+		JMenuItem jmiFormButtonReset  = new JMenuItem(Translatrix.getTranslationString("FormButtonReset"));  jmiFormButtonReset.setActionCommand(CMD_FORM_RESET);   jmiFormButtonReset.addActionListener(this);  jMenuForms.add(jmiFormButtonReset);
 
 		/* TOOLS Menu */
 		if(hasSpellChecker)
 		{
-			data.setjMenuTools(new JMenu(Translatrix.getTranslationString("Tools")));
-			htMenus.put(KEY_MENU_TOOLS, data.getjMenuTools());
-			JMenuItem jmiSpellcheck = new JMenuItem(Translatrix.getTranslationString("ToolSpellcheck")); jmiSpellcheck.setActionCommand(CMD_SPELLCHECK); jmiSpellcheck.addActionListener(this); data.getjMenuTools().add(jmiSpellcheck);
+			jMenuTools = new JMenu(Translatrix.getTranslationString("Tools"));
+			htMenus.put(KEY_MENU_TOOLS, jMenuTools);
+			JMenuItem jmiSpellcheck = new JMenuItem(Translatrix.getTranslationString("ToolSpellcheck")); jmiSpellcheck.setActionCommand(CMD_SPELLCHECK); jmiSpellcheck.addActionListener(this); jMenuTools.add(jmiSpellcheck);
 		}
 
 		/* SEARCH Menu */
-		data.setjMenuSearch(new JMenu(Translatrix.getTranslationString("Search")));
-		htMenus.put(KEY_MENU_SEARCH, data.getjMenuSearch());
-		JMenuItem jmiFind      = new JMenuItem(Translatrix.getTranslationString("SearchFind"));      if(showMenuIcons) { jmiFind.setIcon(getEkitIcon("Find")); };           jmiFind.setActionCommand(CMD_SEARCH_FIND);           jmiFind.addActionListener(this);      jmiFind.setAccelerator(KeyStroke.getKeyStroke('F', data.getCTRLKEY(), false));      data.getjMenuSearch().add(jmiFind);
-		JMenuItem jmiFindAgain = new JMenuItem(Translatrix.getTranslationString("SearchFindAgain")); if(showMenuIcons) { jmiFindAgain.setIcon(getEkitIcon("FindAgain")); }; jmiFindAgain.setActionCommand(CMD_SEARCH_FIND_AGAIN); jmiFindAgain.addActionListener(this); jmiFindAgain.setAccelerator(KeyStroke.getKeyStroke('G', data.getCTRLKEY(), false)); data.getjMenuSearch().add(jmiFindAgain);
-		JMenuItem jmiReplace   = new JMenuItem(Translatrix.getTranslationString("SearchReplace"));   if(showMenuIcons) { jmiReplace.setIcon(getEkitIcon("Replace")); };     jmiReplace.setActionCommand(CMD_SEARCH_REPLACE);     jmiReplace.addActionListener(this);   jmiReplace.setAccelerator(KeyStroke.getKeyStroke('R', data.getCTRLKEY(), false));   data.getjMenuSearch().add(jmiReplace);
+		jMenuSearch            = new JMenu(Translatrix.getTranslationString("Search"));
+		htMenus.put(KEY_MENU_SEARCH, jMenuSearch);
+		JMenuItem jmiFind      = new JMenuItem(Translatrix.getTranslationString("SearchFind"));      if(showMenuIcons) { jmiFind.setIcon(getEkitIcon("Find")); };           jmiFind.setActionCommand(CMD_SEARCH_FIND);           jmiFind.addActionListener(this);      jmiFind.setAccelerator(KeyStroke.getKeyStroke('F', CTRLKEY, false));      jMenuSearch.add(jmiFind);
+		JMenuItem jmiFindAgain = new JMenuItem(Translatrix.getTranslationString("SearchFindAgain")); if(showMenuIcons) { jmiFindAgain.setIcon(getEkitIcon("FindAgain")); }; jmiFindAgain.setActionCommand(CMD_SEARCH_FIND_AGAIN); jmiFindAgain.addActionListener(this); jmiFindAgain.setAccelerator(KeyStroke.getKeyStroke('G', CTRLKEY, false)); jMenuSearch.add(jmiFindAgain);
+		JMenuItem jmiReplace   = new JMenuItem(Translatrix.getTranslationString("SearchReplace"));   if(showMenuIcons) { jmiReplace.setIcon(getEkitIcon("Replace")); };     jmiReplace.setActionCommand(CMD_SEARCH_REPLACE);     jmiReplace.addActionListener(this);   jmiReplace.setAccelerator(KeyStroke.getKeyStroke('R', CTRLKEY, false));   jMenuSearch.add(jmiReplace);
 
 		/* HELP Menu */
-		data.setjMenuHelp(new JMenu(Translatrix.getTranslationString("Help")));
-		htMenus.put(KEY_MENU_HELP, data.getjMenuHelp());
-		JMenuItem jmiAbout = new JMenuItem(Translatrix.getTranslationString("About")); jmiAbout.setActionCommand(CMD_HELP_ABOUT); jmiAbout.addActionListener(this); data.getjMenuHelp().add(jmiAbout);
+		jMenuHelp = new JMenu(Translatrix.getTranslationString("Help"));
+		htMenus.put(KEY_MENU_HELP, jMenuHelp);
+		JMenuItem jmiAbout = new JMenuItem(Translatrix.getTranslationString("About")); jmiAbout.setActionCommand(CMD_HELP_ABOUT); jmiAbout.addActionListener(this); jMenuHelp.add(jmiAbout);
 
 		/* DEBUG Menu */
-		data.setjMenuDebug(new JMenu(Translatrix.getTranslationString("Debug")));
-		htMenus.put(KEY_MENU_DEBUG, data.getjMenuDebug());
-		JMenuItem jmiDesc    = new JMenuItem(Translatrix.getTranslationString("DescribeDoc")); jmiDesc.setActionCommand(CMD_DEBUG_DESCRIBE_DOC);       jmiDesc.addActionListener(this);    data.getjMenuDebug().add(jmiDesc);
-		JMenuItem jmiDescCSS = new JMenuItem(Translatrix.getTranslationString("DescribeCSS")); jmiDescCSS.setActionCommand(CMD_DEBUG_DESCRIBE_CSS); jmiDescCSS.addActionListener(this); data.getjMenuDebug().add(jmiDescCSS);
-		JMenuItem jmiTag     = new JMenuItem(Translatrix.getTranslationString("WhatTags"));    jmiTag.setActionCommand(CMD_DEBUG_CURRENT_TAGS);        jmiTag.addActionListener(this);     data.getjMenuDebug().add(jmiTag);
+		jMenuDebug           = new JMenu(Translatrix.getTranslationString("Debug"));
+		htMenus.put(KEY_MENU_DEBUG, jMenuDebug);
+		JMenuItem jmiDesc    = new JMenuItem(Translatrix.getTranslationString("DescribeDoc")); jmiDesc.setActionCommand(CMD_DEBUG_DESCRIBE_DOC);       jmiDesc.addActionListener(this);    jMenuDebug.add(jmiDesc);
+		JMenuItem jmiDescCSS = new JMenuItem(Translatrix.getTranslationString("DescribeCSS")); jmiDescCSS.setActionCommand(CMD_DEBUG_DESCRIBE_CSS); jmiDescCSS.addActionListener(this); jMenuDebug.add(jmiDescCSS);
+		JMenuItem jmiTag     = new JMenuItem(Translatrix.getTranslationString("WhatTags"));    jmiTag.setActionCommand(CMD_DEBUG_CURRENT_TAGS);        jmiTag.addActionListener(this);     jMenuDebug.add(jmiTag);
 
 		/* Create menubar and add menus */
-		data.setjMenuBar(new JMenuBar());
-		data.getjMenuBar().add(data.getjMenuFile());
-		data.getjMenuBar().add(data.getjMenuEdit());
-		data.getjMenuBar().add(data.getjMenuView());
-		data.getjMenuBar().add(data.getjMenuFont());
-		data.getjMenuBar().add(data.getjMenuFormat());
-		data.getjMenuBar().add(data.getjMenuSearch());
-		data.getjMenuBar().add(data.getjMenuInsert());
-		data.getjMenuBar().add(data.getjMenuTable());
-		data.getjMenuBar().add(data.getjMenuForms());
-		if(data.getjMenuTools() != null) { data.getjMenuBar().add(data.getjMenuTools()); }
-		data.getjMenuBar().add(data.getjMenuHelp());
+		jMenuBar = new JMenuBar();
+		jMenuBar.add(jMenuFile);
+		jMenuBar.add(jMenuEdit);
+		jMenuBar.add(jMenuView);
+		jMenuBar.add(jMenuFont);
+		jMenuBar.add(jMenuFormat);
+		jMenuBar.add(jMenuSearch);
+		jMenuBar.add(jMenuInsert);
+		jMenuBar.add(jMenuTable);
+		jMenuBar.add(jMenuForms);
+		if(jMenuTools != null) { jMenuBar.add(jMenuTools); }
+		jMenuBar.add(jMenuHelp);
 		if(debugMode)
 		{
-			data.getjMenuBar().add(data.getjMenuDebug());
+			jMenuBar.add(jMenuDebug);
 		}
 
 		/* Create toolbar tool objects */
-		data.setJbtnNewHTML(new JButtonNoFocus(getEkitIcon("New")));
-			data.getJbtnNewHTML().setToolTipText(Translatrix.getTranslationString("NewDocument"));
-			data.getJbtnNewHTML().setActionCommand(CMD_DOC_NEW);
-			data.getJbtnNewHTML().addActionListener(this);
-			htTools.put(KEY_TOOL_NEW, data.getJbtnNewHTML());
-		data.setJbtnNewStyledHTML(new JButtonNoFocus(getEkitIcon("NewStyled")));
-			data.getJbtnNewStyledHTML().setToolTipText(Translatrix.getTranslationString("NewStyledDocument"));
-			data.getJbtnNewStyledHTML().setActionCommand(CMD_DOC_NEW_STYLED);
-			data.getJbtnNewStyledHTML().addActionListener(this);
-			htTools.put(KEY_TOOL_NEWSTYLED, data.getJbtnNewStyledHTML());
-		data.setJbtnOpenHTML(new JButtonNoFocus(getEkitIcon("Open")));
-			data.getJbtnOpenHTML().setToolTipText(Translatrix.getTranslationString("OpenDocument"));
-			data.getJbtnOpenHTML().setActionCommand(CMD_DOC_OPEN_HTML);
-			data.getJbtnOpenHTML().addActionListener(this);
-			htTools.put(KEY_TOOL_OPEN, data.getJbtnOpenHTML());
-		data.setJbtnSaveHTML(new JButtonNoFocus(getEkitIcon("Save")));
-			data.getJbtnSaveHTML().setToolTipText(Translatrix.getTranslationString("SaveDocument"));
-			data.getJbtnSaveHTML().setActionCommand(CMD_DOC_SAVE_AS);
-			data.getJbtnSaveHTML().addActionListener(this);
-			htTools.put(KEY_TOOL_SAVE, data.getJbtnSaveHTML());
-		data.setJbtnPrint(new JButtonNoFocus(getEkitIcon("Print")));
-			data.getJbtnPrint().setToolTipText(Translatrix.getTranslationString("PrintDocument"));
-			data.getJbtnPrint().setActionCommand(CMD_DOC_PRINT);
-			data.getJbtnPrint().addActionListener(this);
-			htTools.put(KEY_TOOL_PRINT, data.getJbtnPrint());
+		jbtnNewHTML = new JButtonNoFocus(getEkitIcon("New"));
+			jbtnNewHTML.setToolTipText(Translatrix.getTranslationString("NewDocument"));
+			jbtnNewHTML.setActionCommand(CMD_DOC_NEW);
+			jbtnNewHTML.addActionListener(this);
+			htTools.put(KEY_TOOL_NEW, jbtnNewHTML);
+		jbtnNewStyledHTML = new JButtonNoFocus(getEkitIcon("NewStyled"));
+			jbtnNewStyledHTML.setToolTipText(Translatrix.getTranslationString("NewStyledDocument"));
+			jbtnNewStyledHTML.setActionCommand(CMD_DOC_NEW_STYLED);
+			jbtnNewStyledHTML.addActionListener(this);
+			htTools.put(KEY_TOOL_NEWSTYLED, jbtnNewStyledHTML);
+		jbtnOpenHTML = new JButtonNoFocus(getEkitIcon("Open"));
+			jbtnOpenHTML.setToolTipText(Translatrix.getTranslationString("OpenDocument"));
+			jbtnOpenHTML.setActionCommand(CMD_DOC_OPEN_HTML);
+			jbtnOpenHTML.addActionListener(this);
+			htTools.put(KEY_TOOL_OPEN, jbtnOpenHTML);
+		jbtnSaveHTML = new JButtonNoFocus(getEkitIcon("Save"));
+			jbtnSaveHTML.setToolTipText(Translatrix.getTranslationString("SaveDocument"));
+			jbtnSaveHTML.setActionCommand(CMD_DOC_SAVE_AS);
+			jbtnSaveHTML.addActionListener(this);
+			htTools.put(KEY_TOOL_SAVE, jbtnSaveHTML);
+		jbtnPrint = new JButtonNoFocus(getEkitIcon("Print"));
+			jbtnPrint.setToolTipText(Translatrix.getTranslationString("PrintDocument"));
+			jbtnPrint.setActionCommand(CMD_DOC_PRINT);
+			jbtnPrint.addActionListener(this);
+			htTools.put(KEY_TOOL_PRINT, jbtnPrint);
 //		jbtnCut = new JButtonNoFocus(new DefaultEditorKit.CutAction());
-		data.setJbtnCut(new JButtonNoFocus());
-			data.getJbtnCut().setActionCommand(CMD_CLIP_CUT);
-			data.getJbtnCut().addActionListener(new java.awt.event.ActionListener() {
+		jbtnCut = new JButtonNoFocus();
+			jbtnCut.setActionCommand(CMD_CLIP_CUT);
+			jbtnCut.addActionListener(new java.awt.event.ActionListener() {
 				public void actionPerformed(java.awt.event.ActionEvent evt) {
 					EkitCore.this.actionPerformed(evt);
 				}
 			});
-			data.getJbtnCut().setIcon(getEkitIcon("Cut"));
-			data.getJbtnCut().setText(null);
-			data.getJbtnCut().setToolTipText(Translatrix.getTranslationString("Cut"));
-			htTools.put(KEY_TOOL_CUT, data.getJbtnCut());
+			jbtnCut.setIcon(getEkitIcon("Cut"));
+			jbtnCut.setText(null);
+			jbtnCut.setToolTipText(Translatrix.getTranslationString("Cut"));
+			htTools.put(KEY_TOOL_CUT, jbtnCut);
 //		jbtnCopy = new JButtonNoFocus(new DefaultEditorKit.CopyAction());
-		data.setJbtnCopy(new JButtonNoFocus());
-			data.getJbtnCopy().setActionCommand(CMD_CLIP_COPY);
-			data.getJbtnCopy().addActionListener(new java.awt.event.ActionListener() {
+		jbtnCopy = new JButtonNoFocus();
+			jbtnCopy.setActionCommand(CMD_CLIP_COPY);
+			jbtnCopy.addActionListener(new java.awt.event.ActionListener() {
 				public void actionPerformed(java.awt.event.ActionEvent evt) {
 					EkitCore.this.actionPerformed(evt);
 				}
 			});
-			data.getJbtnCopy().setIcon(getEkitIcon("Copy"));
-			data.getJbtnCopy().setText(null);
-			data.getJbtnCopy().setToolTipText(Translatrix.getTranslationString("Copy"));
-			htTools.put(KEY_TOOL_COPY, data.getJbtnCopy());
+			jbtnCopy.setIcon(getEkitIcon("Copy"));
+			jbtnCopy.setText(null);
+			jbtnCopy.setToolTipText(Translatrix.getTranslationString("Copy"));
+			htTools.put(KEY_TOOL_COPY, jbtnCopy);
 //		jbtnPaste = new JButtonNoFocus(new DefaultEditorKit.PasteAction());
-		data.setJbtnPaste(new JButtonNoFocus());
-			data.getJbtnPaste().setActionCommand(CMD_CLIP_PASTE);
-			data.getJbtnPaste().addActionListener(new java.awt.event.ActionListener() {
+		jbtnPaste = new JButtonNoFocus();
+			jbtnPaste.setActionCommand(CMD_CLIP_PASTE);
+			jbtnPaste.addActionListener(new java.awt.event.ActionListener() {
 				public void actionPerformed(java.awt.event.ActionEvent evt) {
 					EkitCore.this.actionPerformed(evt);
 				}
 			});
-			data.getJbtnPaste().setIcon(getEkitIcon("Paste"));
-			data.getJbtnPaste().setText(null);
-			data.getJbtnPaste().setToolTipText(Translatrix.getTranslationString("Paste"));
-			htTools.put(KEY_TOOL_PASTE, data.getJbtnPaste());
-		data.setJbtnPasteX(new JButtonNoFocus());
-			data.getJbtnPasteX().setActionCommand(CMD_CLIP_PASTE_PLAIN);
-			data.getJbtnPasteX().addActionListener(new java.awt.event.ActionListener() {
+			jbtnPaste.setIcon(getEkitIcon("Paste"));
+			jbtnPaste.setText(null);
+			jbtnPaste.setToolTipText(Translatrix.getTranslationString("Paste"));
+			htTools.put(KEY_TOOL_PASTE, jbtnPaste);
+		jbtnPasteX = new JButtonNoFocus();
+			jbtnPasteX.setActionCommand(CMD_CLIP_PASTE_PLAIN);
+			jbtnPasteX.addActionListener(new java.awt.event.ActionListener() {
 				public void actionPerformed(java.awt.event.ActionEvent evt) {
 					EkitCore.this.actionPerformed(evt);
 				}
 			});
-			data.getJbtnPasteX().setIcon(getEkitIcon("PasteUnformatted"));
-			data.getJbtnPasteX().setText(null);
-			data.getJbtnPasteX().setToolTipText(Translatrix.getTranslationString("PasteUnformatted"));
-			htTools.put(KEY_TOOL_PASTEX, data.getJbtnPasteX());
-		data.setJbtnUndo(new JButtonNoFocus(data.getUndoAction()));
-			data.getJbtnUndo().setIcon(getEkitIcon("Undo"));
-			data.getJbtnUndo().setText(null);
-			data.getJbtnUndo().setToolTipText(Translatrix.getTranslationString("Undo"));
-			htTools.put(KEY_TOOL_UNDO, data.getJbtnUndo());
-		data.setJbtnRedo(new JButtonNoFocus(data.getRedoAction()));
-			data.getJbtnRedo().setIcon(getEkitIcon("Redo"));
-			data.getJbtnRedo().setText(null);
-			data.getJbtnRedo().setToolTipText(Translatrix.getTranslationString("Redo"));
-			htTools.put(KEY_TOOL_REDO, data.getJbtnRedo());
-		data.setJbtnBold(new JButtonNoFocus(data.getActionFontBold()));
-			data.getJbtnBold().setIcon(getEkitIcon("Bold"));
-			data.getJbtnBold().setText(null);
-			data.getJbtnBold().setToolTipText(Translatrix.getTranslationString("FontBold"));
-			htTools.put(KEY_TOOL_BOLD, data.getJbtnBold());
-		data.setJbtnItalic(new JButtonNoFocus(data.getActionFontItalic()));
-			data.getJbtnItalic().setIcon(getEkitIcon("Italic"));
-			data.getJbtnItalic().setText(null);
-			data.getJbtnItalic().setToolTipText(Translatrix.getTranslationString("FontItalic"));
-			htTools.put(KEY_TOOL_ITALIC, data.getJbtnItalic());
-		data.setJbtnUnderline(new JButtonNoFocus(data.getActionFontUnderline()));
-			data.getJbtnUnderline().setIcon(getEkitIcon("Underline"));
-			data.getJbtnUnderline().setText(null);
-			data.getJbtnUnderline().setToolTipText(Translatrix.getTranslationString("FontUnderline"));
-			htTools.put(KEY_TOOL_UNDERLINE, data.getJbtnUnderline());
-		data.setJbtnStrike(new JButtonNoFocus(data.getActionFontStrike()));
-			data.getJbtnStrike().setIcon(getEkitIcon("Strike"));
-			data.getJbtnStrike().setText(null);
-			data.getJbtnStrike().setToolTipText(Translatrix.getTranslationString("FontStrike"));
-			htTools.put(KEY_TOOL_STRIKE, data.getJbtnStrike());
-		data.setJbtnSuperscript(new JButtonNoFocus(data.getActionFontSuperscript()));
-			data.getJbtnSuperscript().setIcon(getEkitIcon("Super"));
-			data.getJbtnSuperscript().setText(null);
-			data.getJbtnSuperscript().setToolTipText(Translatrix.getTranslationString("FontSuperscript"));
-			htTools.put(KEY_TOOL_SUPER, data.getJbtnSuperscript());
-		data.setJbtnSubscript(new JButtonNoFocus(data.getActionFontSubscript()));
-			data.getJbtnSubscript().setIcon(getEkitIcon("Sub"));
-			data.getJbtnSubscript().setText(null);
-			data.getJbtnSubscript().setToolTipText(Translatrix.getTranslationString("FontSubscript"));
-			htTools.put(KEY_TOOL_SUB, data.getJbtnSubscript());
-		data.setJbtnUList(new JButtonNoFocus(data.getActionListUnordered()));
-			data.getJbtnUList().setIcon(getEkitIcon("UList"));
-			data.getJbtnUList().setText(null);
-			data.getJbtnUList().setToolTipText(Translatrix.getTranslationString("ListUnordered"));
-			htTools.put(KEY_TOOL_ULIST, data.getJbtnUList());
-		data.setJbtnOList(new JButtonNoFocus(data.getActionListOrdered()));
-			data.getJbtnOList().setIcon(getEkitIcon("OList"));
-			data.getJbtnOList().setText(null);
-			data.getJbtnOList().setToolTipText(Translatrix.getTranslationString("ListOrdered"));
-			htTools.put(KEY_TOOL_OLIST, data.getJbtnOList());
-		data.setJbtnAlignLeft(new JButtonNoFocus(data.getActionAlignLeft()));
-			data.getJbtnAlignLeft().setIcon(getEkitIcon("AlignLeft"));
-			data.getJbtnAlignLeft().setText(null);
-			data.getJbtnAlignLeft().setToolTipText(Translatrix.getTranslationString("AlignLeft"));
-			htTools.put(KEY_TOOL_ALIGNL, data.getJbtnAlignLeft());
-		data.setJbtnAlignCenter(new JButtonNoFocus(data.getActionAlignCenter()));
-			data.getJbtnAlignCenter().setIcon(getEkitIcon("AlignCenter"));
-			data.getJbtnAlignCenter().setText(null);
-			data.getJbtnAlignCenter().setToolTipText(Translatrix.getTranslationString("AlignCenter"));
-			htTools.put(KEY_TOOL_ALIGNC, data.getJbtnAlignCenter());
-		data.setJbtnAlignRight(new JButtonNoFocus(data.getActionAlignRight()));
-			data.getJbtnAlignRight().setIcon(getEkitIcon("AlignRight"));
-			data.getJbtnAlignRight().setText(null);
-			data.getJbtnAlignRight().setToolTipText(Translatrix.getTranslationString("AlignRight"));
-			htTools.put(KEY_TOOL_ALIGNR, data.getJbtnAlignRight());
-		data.setJbtnAlignJustified(new JButtonNoFocus(data.getActionAlignJustified()));
-			data.getJbtnAlignJustified().setIcon(getEkitIcon("AlignJustified"));
-			data.getJbtnAlignJustified().setText(null);
-			data.getJbtnAlignJustified().setToolTipText(Translatrix.getTranslationString("AlignJustified"));
-			htTools.put(KEY_TOOL_ALIGNJ, data.getJbtnAlignJustified());
-		data.setJbtnUnicode(new JButtonNoFocus());
-			data.getJbtnUnicode().setActionCommand(CMD_INSERT_UNICODE_CHAR);
-			data.getJbtnUnicode().addActionListener(this);
-			data.getJbtnUnicode().setIcon(getEkitIcon("Unicode"));
-			data.getJbtnUnicode().setText(null);
-			data.getJbtnUnicode().setToolTipText(Translatrix.getTranslationString("ToolUnicode"));
-			htTools.put(KEY_TOOL_UNICODE, data.getJbtnUnicode());
-		data.setJbtnUnicodeMath(new JButtonNoFocus());
-			data.getJbtnUnicodeMath().setActionCommand(CMD_INSERT_UNICODE_MATH);
-			data.getJbtnUnicodeMath().addActionListener(this);
-			data.getJbtnUnicodeMath().setIcon(getEkitIcon("Math"));
-			data.getJbtnUnicodeMath().setText(null);
-			data.getJbtnUnicodeMath().setToolTipText(Translatrix.getTranslationString("ToolUnicodeMath"));
-			htTools.put(KEY_TOOL_UNIMATH, data.getJbtnUnicodeMath());
-		data.setJbtnFind(new JButtonNoFocus());
-			data.getJbtnFind().setActionCommand(CMD_SEARCH_FIND);
-			data.getJbtnFind().addActionListener(this);
-			data.getJbtnFind().setIcon(getEkitIcon("Find"));
-			data.getJbtnFind().setText(null);
-			data.getJbtnFind().setToolTipText(Translatrix.getTranslationString("SearchFind"));
-			htTools.put(KEY_TOOL_FIND, data.getJbtnFind());
-		data.setJbtnAnchor(new JButtonNoFocus(data.getActionInsertAnchor()));
-			data.getJbtnAnchor().setIcon(getEkitIcon("Anchor"));
-			data.getJbtnAnchor().setText(null);
-			data.getJbtnAnchor().setToolTipText(Translatrix.getTranslationString("ToolAnchor"));
-			htTools.put(KEY_TOOL_ANCHOR, data.getJbtnAnchor());
-		data.setJtbtnViewSource(new JToggleButtonNoFocus(getEkitIcon("Source")));
-			data.getJtbtnViewSource().setText(null);
-			data.getJtbtnViewSource().setToolTipText(Translatrix.getTranslationString("ViewSource"));
-			data.getJtbtnViewSource().setActionCommand(CMD_TOGGLE_SOURCE_VIEW);
-			data.getJtbtnViewSource().addActionListener(this);
-			data.getJtbtnViewSource().setPreferredSize(data.getJbtnAnchor().getPreferredSize());
-			data.getJtbtnViewSource().setMinimumSize(data.getJbtnAnchor().getMinimumSize());
-			data.getJtbtnViewSource().setMaximumSize(data.getJbtnAnchor().getMaximumSize());
-			htTools.put(KEY_TOOL_SOURCE, data.getJtbtnViewSource());
-		data.setJcmbStyleSelector(new JComboBoxNoFocus());
-			data.getJcmbStyleSelector().setToolTipText(Translatrix.getTranslationString("PickCSSStyle"));
-			data.getJcmbStyleSelector().setAction(new StylesAction(data.getJcmbStyleSelector()));
-			htTools.put(KEY_TOOL_STYLES, data.getJcmbStyleSelector());
+			jbtnPasteX.setIcon(getEkitIcon("PasteUnformatted"));
+			jbtnPasteX.setText(null);
+			jbtnPasteX.setToolTipText(Translatrix.getTranslationString("PasteUnformatted"));
+			htTools.put(KEY_TOOL_PASTEX, jbtnPasteX);
+		jbtnUndo = new JButtonNoFocus(undoAction);
+			jbtnUndo.setIcon(getEkitIcon("Undo"));
+			jbtnUndo.setText(null);
+			jbtnUndo.setToolTipText(Translatrix.getTranslationString("Undo"));
+			htTools.put(KEY_TOOL_UNDO, jbtnUndo);
+		jbtnRedo = new JButtonNoFocus(redoAction);
+			jbtnRedo.setIcon(getEkitIcon("Redo"));
+			jbtnRedo.setText(null);
+			jbtnRedo.setToolTipText(Translatrix.getTranslationString("Redo"));
+			htTools.put(KEY_TOOL_REDO, jbtnRedo);
+		jbtnBold = new JButtonNoFocus(actionFontBold);
+			jbtnBold.setIcon(getEkitIcon("Bold"));
+			jbtnBold.setText(null);
+			jbtnBold.setToolTipText(Translatrix.getTranslationString("FontBold"));
+			htTools.put(KEY_TOOL_BOLD, jbtnBold);
+		jbtnItalic = new JButtonNoFocus(actionFontItalic);
+			jbtnItalic.setIcon(getEkitIcon("Italic"));
+			jbtnItalic.setText(null);
+			jbtnItalic.setToolTipText(Translatrix.getTranslationString("FontItalic"));
+			htTools.put(KEY_TOOL_ITALIC, jbtnItalic);
+		jbtnUnderline = new JButtonNoFocus(actionFontUnderline);
+			jbtnUnderline.setIcon(getEkitIcon("Underline"));
+			jbtnUnderline.setText(null);
+			jbtnUnderline.setToolTipText(Translatrix.getTranslationString("FontUnderline"));
+			htTools.put(KEY_TOOL_UNDERLINE, jbtnUnderline);
+		jbtnStrike = new JButtonNoFocus(actionFontStrike);
+			jbtnStrike.setIcon(getEkitIcon("Strike"));
+			jbtnStrike.setText(null);
+			jbtnStrike.setToolTipText(Translatrix.getTranslationString("FontStrike"));
+			htTools.put(KEY_TOOL_STRIKE, jbtnStrike);
+		jbtnSuperscript = new JButtonNoFocus(actionFontSuperscript);
+			jbtnSuperscript.setIcon(getEkitIcon("Super"));
+			jbtnSuperscript.setText(null);
+			jbtnSuperscript.setToolTipText(Translatrix.getTranslationString("FontSuperscript"));
+			htTools.put(KEY_TOOL_SUPER, jbtnSuperscript);
+		jbtnSubscript = new JButtonNoFocus(actionFontSubscript);
+			jbtnSubscript.setIcon(getEkitIcon("Sub"));
+			jbtnSubscript.setText(null);
+			jbtnSubscript.setToolTipText(Translatrix.getTranslationString("FontSubscript"));
+			htTools.put(KEY_TOOL_SUB, jbtnSubscript);
+		jbtnUList = new JButtonNoFocus(actionListUnordered);
+			jbtnUList.setIcon(getEkitIcon("UList"));
+			jbtnUList.setText(null);
+			jbtnUList.setToolTipText(Translatrix.getTranslationString("ListUnordered"));
+			htTools.put(KEY_TOOL_ULIST, jbtnUList);
+		jbtnOList = new JButtonNoFocus(actionListOrdered);
+			jbtnOList.setIcon(getEkitIcon("OList"));
+			jbtnOList.setText(null);
+			jbtnOList.setToolTipText(Translatrix.getTranslationString("ListOrdered"));
+			htTools.put(KEY_TOOL_OLIST, jbtnOList);
+		jbtnAlignLeft = new JButtonNoFocus(actionAlignLeft);
+			jbtnAlignLeft.setIcon(getEkitIcon("AlignLeft"));
+			jbtnAlignLeft.setText(null);
+			jbtnAlignLeft.setToolTipText(Translatrix.getTranslationString("AlignLeft"));
+			htTools.put(KEY_TOOL_ALIGNL, jbtnAlignLeft);
+		jbtnAlignCenter = new JButtonNoFocus(actionAlignCenter);
+			jbtnAlignCenter.setIcon(getEkitIcon("AlignCenter"));
+			jbtnAlignCenter.setText(null);
+			jbtnAlignCenter.setToolTipText(Translatrix.getTranslationString("AlignCenter"));
+			htTools.put(KEY_TOOL_ALIGNC, jbtnAlignCenter);
+		jbtnAlignRight = new JButtonNoFocus(actionAlignRight);
+			jbtnAlignRight.setIcon(getEkitIcon("AlignRight"));
+			jbtnAlignRight.setText(null);
+			jbtnAlignRight.setToolTipText(Translatrix.getTranslationString("AlignRight"));
+			htTools.put(KEY_TOOL_ALIGNR, jbtnAlignRight);
+		jbtnAlignJustified = new JButtonNoFocus(actionAlignJustified);
+			jbtnAlignJustified.setIcon(getEkitIcon("AlignJustified"));
+			jbtnAlignJustified.setText(null);
+			jbtnAlignJustified.setToolTipText(Translatrix.getTranslationString("AlignJustified"));
+			htTools.put(KEY_TOOL_ALIGNJ, jbtnAlignJustified);
+		jbtnUnicode = new JButtonNoFocus();
+			jbtnUnicode.setActionCommand(CMD_INSERT_UNICODE_CHAR);
+			jbtnUnicode.addActionListener(this);
+			jbtnUnicode.setIcon(getEkitIcon("Unicode"));
+			jbtnUnicode.setText(null);
+			jbtnUnicode.setToolTipText(Translatrix.getTranslationString("ToolUnicode"));
+			htTools.put(KEY_TOOL_UNICODE, jbtnUnicode);
+		jbtnUnicodeMath = new JButtonNoFocus();
+			jbtnUnicodeMath.setActionCommand(CMD_INSERT_UNICODE_MATH);
+			jbtnUnicodeMath.addActionListener(this);
+			jbtnUnicodeMath.setIcon(getEkitIcon("Math"));
+			jbtnUnicodeMath.setText(null);
+			jbtnUnicodeMath.setToolTipText(Translatrix.getTranslationString("ToolUnicodeMath"));
+			htTools.put(KEY_TOOL_UNIMATH, jbtnUnicodeMath);
+		jbtnFind = new JButtonNoFocus();
+			jbtnFind.setActionCommand(CMD_SEARCH_FIND);
+			jbtnFind.addActionListener(this);
+			jbtnFind.setIcon(getEkitIcon("Find"));
+			jbtnFind.setText(null);
+			jbtnFind.setToolTipText(Translatrix.getTranslationString("SearchFind"));
+			htTools.put(KEY_TOOL_FIND, jbtnFind);
+		jbtnAnchor = new JButtonNoFocus(actionInsertAnchor);
+			jbtnAnchor.setIcon(getEkitIcon("Anchor"));
+			jbtnAnchor.setText(null);
+			jbtnAnchor.setToolTipText(Translatrix.getTranslationString("ToolAnchor"));
+			htTools.put(KEY_TOOL_ANCHOR, jbtnAnchor);
+		jtbtnViewSource = new JToggleButtonNoFocus(getEkitIcon("Source"));
+			jtbtnViewSource.setText(null);
+			jtbtnViewSource.setToolTipText(Translatrix.getTranslationString("ViewSource"));
+			jtbtnViewSource.setActionCommand(CMD_TOGGLE_SOURCE_VIEW);
+			jtbtnViewSource.addActionListener(this);
+			jtbtnViewSource.setPreferredSize(jbtnAnchor.getPreferredSize());
+			jtbtnViewSource.setMinimumSize(jbtnAnchor.getMinimumSize());
+			jtbtnViewSource.setMaximumSize(jbtnAnchor.getMaximumSize());
+			htTools.put(KEY_TOOL_SOURCE, jtbtnViewSource);
+		jcmbStyleSelector = new JComboBoxNoFocus();
+			jcmbStyleSelector.setToolTipText(Translatrix.getTranslationString("PickCSSStyle"));
+			jcmbStyleSelector.setAction(new StylesAction(jcmbStyleSelector));
+			htTools.put(KEY_TOOL_STYLES, jcmbStyleSelector);
 		String[] fonts = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
 			Vector<String> vcFontnames = new Vector<String>(fonts.length + 1);
 			vcFontnames.add(Translatrix.getTranslationString("SelectorToolFontsDefaultFont"));
@@ -949,118 +1086,118 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 				vcFontnames.add(fontname);
 			}
 			Collections.sort(vcFontnames);
-			data.setJcmbFontSelector(new JComboBoxNoFocus(vcFontnames));
-			data.getJcmbFontSelector().setAction(new SetFontFamilyAction(this, "[EKITFONTSELECTOR]"));
-			htTools.put(KEY_TOOL_FONTS, data.getJcmbFontSelector());
-		data.setJbtnInsertTable(new JButtonNoFocus());
-			data.getJbtnInsertTable().setActionCommand(CMD_TABLE_INSERT);
-			data.getJbtnInsertTable().addActionListener(this);
-			data.getJbtnInsertTable().setIcon(getEkitIcon("TableCreate"));
-			data.getJbtnInsertTable().setText(null);
-			data.getJbtnInsertTable().setToolTipText(Translatrix.getTranslationString("InsertTable"));
-			htTools.put(KEY_TOOL_INSTABLE, data.getJbtnInsertTable());
-		data.setJbtnEditTable(new JButtonNoFocus());
-			data.getJbtnEditTable().setActionCommand(CMD_TABLE_EDIT);
-			data.getJbtnEditTable().addActionListener(this);
-			data.getJbtnEditTable().setIcon(getEkitIcon("TableEdit"));
-			data.getJbtnEditTable().setText(null);
-			data.getJbtnEditTable().setToolTipText(Translatrix.getTranslationString("TableEdit"));
-			htTools.put(KEY_TOOL_EDITTABLE, data.getJbtnEditTable());
-		data.setJbtnEditCell(new JButtonNoFocus());
-			data.getJbtnEditCell().setActionCommand(CMD_TABLE_CELL_EDIT);
-			data.getJbtnEditCell().addActionListener(this);
-			data.getJbtnEditCell().setIcon(getEkitIcon("CellEdit"));
-			data.getJbtnEditCell().setText(null);
-			data.getJbtnEditCell().setToolTipText(Translatrix.getTranslationString("TableCellEdit"));
-			htTools.put(KEY_TOOL_EDITCELL, data.getJbtnEditCell());			
-		data.setJbtnInsertRow(new JButtonNoFocus());
-			data.getJbtnInsertRow().setActionCommand(CMD_TABLE_ROW_INSERT);
-			data.getJbtnInsertRow().addActionListener(this);
-			data.getJbtnInsertRow().setIcon(getEkitIcon("InsertRow"));
-			data.getJbtnInsertRow().setText(null);
-			data.getJbtnInsertRow().setToolTipText(Translatrix.getTranslationString("InsertTableRow"));
-			htTools.put(KEY_TOOL_INSERTROW, data.getJbtnInsertRow());
-		data.setJbtnInsertColumn(new JButtonNoFocus());
-			data.getJbtnInsertColumn().setActionCommand(CMD_TABLE_COLUMN_INSERT);
-			data.getJbtnInsertColumn().addActionListener(this);
-			data.getJbtnInsertColumn().setIcon(getEkitIcon("InsertColumn"));
-			data.getJbtnInsertColumn().setText(null);
-			data.getJbtnInsertColumn().setToolTipText(Translatrix.getTranslationString("InsertTableColumn"));
-			htTools.put(KEY_TOOL_INSERTCOL, data.getJbtnInsertColumn());
-		data.setJbtnDeleteRow(new JButtonNoFocus());
-			data.getJbtnDeleteRow().setActionCommand(CMD_TABLE_ROW_DELETE);
-			data.getJbtnDeleteRow().addActionListener(this);
-			data.getJbtnDeleteRow().setIcon(getEkitIcon("DeleteRow"));
-			data.getJbtnDeleteRow().setText(null);
-			data.getJbtnDeleteRow().setToolTipText(Translatrix.getTranslationString("DeleteTableRow"));
-			htTools.put(KEY_TOOL_DELETEROW, data.getJbtnDeleteRow());
-		data.setJbtnDeleteColumn(new JButtonNoFocus());
-			data.getJbtnDeleteColumn().setActionCommand(CMD_TABLE_COLUMN_DELETE);
-			data.getJbtnDeleteColumn().addActionListener(this);
-			data.getJbtnDeleteColumn().setIcon(getEkitIcon("DeleteColumn"));
-			data.getJbtnDeleteColumn().setText(null);
-			data.getJbtnDeleteColumn().setToolTipText(Translatrix.getTranslationString("DeleteTableColumn"));
-			htTools.put(KEY_TOOL_DELETECOL, data.getJbtnDeleteColumn());
+			jcmbFontSelector = new JComboBoxNoFocus(vcFontnames);
+			jcmbFontSelector.setAction(new SetFontFamilyAction(this, "[EKITFONTSELECTOR]"));
+			htTools.put(KEY_TOOL_FONTS, jcmbFontSelector);
+		jbtnInsertTable = new JButtonNoFocus();
+			jbtnInsertTable.setActionCommand(CMD_TABLE_INSERT);
+			jbtnInsertTable.addActionListener(this);
+			jbtnInsertTable.setIcon(getEkitIcon("TableCreate"));
+			jbtnInsertTable.setText(null);
+			jbtnInsertTable.setToolTipText(Translatrix.getTranslationString("InsertTable"));
+			htTools.put(KEY_TOOL_INSTABLE, jbtnInsertTable);
+		jbtnEditTable = new JButtonNoFocus();
+			jbtnEditTable.setActionCommand(CMD_TABLE_EDIT);
+			jbtnEditTable.addActionListener(this);
+			jbtnEditTable.setIcon(getEkitIcon("TableEdit"));
+			jbtnEditTable.setText(null);
+			jbtnEditTable.setToolTipText(Translatrix.getTranslationString("TableEdit"));
+			htTools.put(KEY_TOOL_EDITTABLE, jbtnEditTable);
+		jbtnEditCell = new JButtonNoFocus();
+			jbtnEditCell.setActionCommand(CMD_TABLE_CELL_EDIT);
+			jbtnEditCell.addActionListener(this);
+			jbtnEditCell.setIcon(getEkitIcon("CellEdit"));
+			jbtnEditCell.setText(null);
+			jbtnEditCell.setToolTipText(Translatrix.getTranslationString("TableCellEdit"));
+			htTools.put(KEY_TOOL_EDITCELL, jbtnEditCell);			
+		jbtnInsertRow = new JButtonNoFocus();
+			jbtnInsertRow.setActionCommand(CMD_TABLE_ROW_INSERT);
+			jbtnInsertRow.addActionListener(this);
+			jbtnInsertRow.setIcon(getEkitIcon("InsertRow"));
+			jbtnInsertRow.setText(null);
+			jbtnInsertRow.setToolTipText(Translatrix.getTranslationString("InsertTableRow"));
+			htTools.put(KEY_TOOL_INSERTROW, jbtnInsertRow);
+		jbtnInsertColumn = new JButtonNoFocus();
+			jbtnInsertColumn.setActionCommand(CMD_TABLE_COLUMN_INSERT);
+			jbtnInsertColumn.addActionListener(this);
+			jbtnInsertColumn.setIcon(getEkitIcon("InsertColumn"));
+			jbtnInsertColumn.setText(null);
+			jbtnInsertColumn.setToolTipText(Translatrix.getTranslationString("InsertTableColumn"));
+			htTools.put(KEY_TOOL_INSERTCOL, jbtnInsertColumn);
+		jbtnDeleteRow = new JButtonNoFocus();
+			jbtnDeleteRow.setActionCommand(CMD_TABLE_ROW_DELETE);
+			jbtnDeleteRow.addActionListener(this);
+			jbtnDeleteRow.setIcon(getEkitIcon("DeleteRow"));
+			jbtnDeleteRow.setText(null);
+			jbtnDeleteRow.setToolTipText(Translatrix.getTranslationString("DeleteTableRow"));
+			htTools.put(KEY_TOOL_DELETEROW, jbtnDeleteRow);
+		jbtnDeleteColumn = new JButtonNoFocus();
+			jbtnDeleteColumn.setActionCommand(CMD_TABLE_COLUMN_DELETE);
+			jbtnDeleteColumn.addActionListener(this);
+			jbtnDeleteColumn.setIcon(getEkitIcon("DeleteColumn"));
+			jbtnDeleteColumn.setText(null);
+			jbtnDeleteColumn.setToolTipText(Translatrix.getTranslationString("DeleteTableColumn"));
+			htTools.put(KEY_TOOL_DELETECOL, jbtnDeleteColumn);
 
 		/* Create the toolbar */
 		if(multiBar)
 		{
-			data.setjToolBarMain(new JToolBar(JToolBar.HORIZONTAL));
-			data.getjToolBarMain().setFloatable(false);
-			data.setjToolBarFormat(new JToolBar(JToolBar.HORIZONTAL));
-			data.getjToolBarFormat().setFloatable(false);
-			data.setjToolBarStyles(new JToolBar(JToolBar.HORIZONTAL));
-			data.getjToolBarStyles().setFloatable(false);
+			jToolBarMain = new JToolBar(JToolBar.HORIZONTAL);
+			jToolBarMain.setFloatable(false);
+			jToolBarFormat = new JToolBar(JToolBar.HORIZONTAL);
+			jToolBarFormat.setFloatable(false);
+			jToolBarStyles = new JToolBar(JToolBar.HORIZONTAL);
+			jToolBarStyles.setFloatable(false);
 
 			initializeMultiToolbars(toolbarSeq);
 
 			// fix the weird size preference of toggle buttons
-			data.getJtbtnViewSource().setPreferredSize(data.getJbtnAnchor().getPreferredSize());
-			data.getJtbtnViewSource().setMinimumSize(data.getJbtnAnchor().getMinimumSize());
-			data.getJtbtnViewSource().setMaximumSize(data.getJbtnAnchor().getMaximumSize());
+			jtbtnViewSource.setPreferredSize(jbtnAnchor.getPreferredSize());
+			jtbtnViewSource.setMinimumSize(jbtnAnchor.getMinimumSize());
+			jtbtnViewSource.setMaximumSize(jbtnAnchor.getMaximumSize());
 		}
 		else if(includeToolBar)
 		{
-			data.setjToolBar(new JToolBar(JToolBar.HORIZONTAL));
-			data.getjToolBar().setFloatable(false);
+			jToolBar = new JToolBar(JToolBar.HORIZONTAL);
+			jToolBar.setFloatable(false);
 
 			initializeSingleToolbar(toolbarSeq);
 
 			// fix the weird size preference of toggle buttons
-			data.getJtbtnViewSource().setPreferredSize(data.getJbtnAnchor().getPreferredSize());
-			data.getJtbtnViewSource().setMinimumSize(data.getJbtnAnchor().getMinimumSize());
-			data.getJtbtnViewSource().setMaximumSize(data.getJbtnAnchor().getMaximumSize());
+			jtbtnViewSource.setPreferredSize(jbtnAnchor.getPreferredSize());
+			jtbtnViewSource.setMinimumSize(jbtnAnchor.getMinimumSize());
+			jtbtnViewSource.setMaximumSize(jbtnAnchor.getMaximumSize());
 		}
 
 		/* Create the scroll area for the text pane */
-		JScrollPane jspViewport = new JScrollPane(data.getJtpMain());
+		JScrollPane jspViewport = new JScrollPane(jtpMain);
 		jspViewport.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		jspViewport.setPreferredSize(new Dimension(400, 400));
 		jspViewport.setMinimumSize(new Dimension(32, 32));
 
 		/* Create the scroll area for the source viewer */
-		data.setJspSource(new JScrollPane(data.getJtpSource()));
-		data.getJspSource().setPreferredSize(new Dimension(400, 100));
-		data.getJspSource().setMinimumSize(new Dimension(32, 32));
+		jspSource = new JScrollPane(jtpSource);
+		jspSource.setPreferredSize(new Dimension(400, 100));
+		jspSource.setMinimumSize(new Dimension(32, 32));
 
-		data.setJspltDisplay(new JSplitPane(JSplitPane.VERTICAL_SPLIT));
-		data.getJspltDisplay().setTopComponent(jspViewport);
+		jspltDisplay = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+		jspltDisplay.setTopComponent(jspViewport);
 		if(showViewSource)
 		{
-			data.getJspltDisplay().setBottomComponent(data.getJspSource());
+			jspltDisplay.setBottomComponent(jspSource);
 		}
 		else
 		{
-			data.getJspltDisplay().setBottomComponent(null);
+			jspltDisplay.setBottomComponent(null);
 		}
 
-		data.setiSplitPos(data.getJspltDisplay().getDividerLocation());
+		iSplitPos = jspltDisplay.getDividerLocation();
 
 		registerDocumentStyles();
 
 		/* Add the components to the app */
 		this.setLayout(new BorderLayout());
-		this.add(data.getJspltDisplay(), BorderLayout.CENTER);
+		this.add(jspltDisplay, BorderLayout.CENTER);
 	}
 
 	/** Master Constructor from versions 1.3 and earlier
@@ -1133,20 +1270,20 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 				String decision = sidAsk.getDecisionValue();
 				if(decision.equals(Translatrix.getTranslationString("DialogAccept")))
 				{
-					if(data.getStyleSheet() != null && command.equals(CMD_DOC_NEW_STYLED))
+					if(styleSheet != null && command.equals(CMD_DOC_NEW_STYLED))
 					{
-						data.setHtmlDoc(new ExtendedHTMLDocument(data.getStyleSheet()));
+						htmlDoc = new ExtendedHTMLDocument(styleSheet);
 					}
 					else
 					{
-						data.setHtmlDoc((ExtendedHTMLDocument)(data.getHtmlKit().createDefaultDocument()));
-						data.getHtmlDoc().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-						data.getHtmlDoc().setPreservesUnknownTags(data.isPreserveUnknownTags());
+						htmlDoc = (ExtendedHTMLDocument)(htmlKit.createDefaultDocument());
+						htmlDoc.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
+						htmlDoc.setPreservesUnknownTags(preserveUnknownTags);
 					}
 //					jtpMain.setText("<HTML><BODY></BODY></HTML>");
-					registerDocument(data.getHtmlDoc());
-					data.getJtpSource().setText(data.getJtpMain().getText());
-					data.setCurrentFile(null);
+					registerDocument(htmlDoc);
+					jtpSource.setText(jtpMain.getText());
+					currentFile = null;
 					updateTitle();
 				}
 			}
@@ -1164,75 +1301,75 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			else if(command.equals(CMD_DOC_SAVE))
 			{
-				writeOut((HTMLDocument)(data.getJtpMain().getDocument()), data.getCurrentFile());
+				writeOut((HTMLDocument)(jtpMain.getDocument()), currentFile);
 				updateTitle();
 			}
 			else if(command.equals(CMD_DOC_SAVE_AS))
 			{
-				writeOut((HTMLDocument)(data.getJtpMain().getDocument()), null);
+				writeOut((HTMLDocument)(jtpMain.getDocument()), null);
 			}
 			else if(command.equals(CMD_DOC_SAVE_BODY))
 			{
-				writeOutFragment((HTMLDocument)(data.getJtpMain().getDocument()),"body");
+				writeOutFragment((HTMLDocument)(jtpMain.getDocument()),"body");
 			}
 			else if(command.equals(CMD_DOC_SAVE_RTF))
 			{
-				writeOutRTF((StyledDocument)(data.getJtpMain().getStyledDocument()));
+				writeOutRTF((StyledDocument)(jtpMain.getStyledDocument()));
 			}
 			else if(command.equals(CMD_DOC_SAVE_BASE64))
 			{
-				writeOutBase64(data.getJtpSource().getText());
+				writeOutBase64(jtpSource.getText());
 			}
 			else if(command.equals(CMD_CLIP_CUT))
 			{
-				if(data.getJspSource().isShowing() && data.getJtpSource().hasFocus())
+				if(jspSource.isShowing() && jtpSource.hasFocus())
 				{
-					data.getJtpSource().cut();
+					jtpSource.cut();
 				}
 				else
 				{
-					data.getJtpMain().cut();
+					jtpMain.cut();
 				}
 			}
 			else if(command.equals(CMD_CLIP_COPY))
 			{
-				if(data.getJspSource().isShowing() && data.getJtpSource().hasFocus())
+				if(jspSource.isShowing() && jtpSource.hasFocus())
 				{
-					data.getJtpSource().copy();
+					jtpSource.copy();
 				}
 				else
 				{
-					data.getJtpMain().copy();
+					jtpMain.copy();
 				}
 			}
 			else if(command.equals(CMD_CLIP_PASTE))
 			{
-				if(data.getJspSource().isShowing() && data.getJtpSource().hasFocus())
+				if(jspSource.isShowing() && jtpSource.hasFocus())
 				{
-					data.getJtpSource().paste();
+					jtpSource.paste();
 				}
 				else
 				{
-					data.getJtpMain().paste();
+					jtpMain.paste();
 				}
 			}
 			else if(command.equals(CMD_CLIP_PASTE_PLAIN))
 			{
-				if(data.getJspSource().isShowing() && data.getJtpSource().hasFocus())
+				if(jspSource.isShowing() && jtpSource.hasFocus())
 				{
-					data.getJtpSource().paste();
+					jtpSource.paste();
 				}
 				else
 				{
 					try
 					{
-						if(data.getSysClipboard() != null)
+						if(sysClipboard != null)
 						{
-							data.getJtpMain().getDocument().insertString(data.getJtpMain().getCaretPosition(), data.getSysClipboard().getData(data.getDfPlainText()).toString(), (AttributeSet)null);
+							jtpMain.getDocument().insertString(jtpMain.getCaretPosition(), sysClipboard.getData(dfPlainText).toString(), (AttributeSet)null);
 						}
 						else
 						{
-							data.getJtpMain().getDocument().insertString(data.getJtpMain().getCaretPosition(), Toolkit.getDefaultToolkit().getSystemClipboard().getData(data.getDfPlainText()).toString(), (AttributeSet)null);
+							jtpMain.getDocument().insertString(jtpMain.getCaretPosition(), Toolkit.getDefaultToolkit().getSystemClipboard().getData(dfPlainText).toString(), (AttributeSet)null);
 						}
 			 			refreshOnUpdate();
 					}
@@ -1245,17 +1382,17 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			else if(command.equals(CMD_DOC_PRINT))
 			{
 				DocumentRenderer dr = new DocumentRenderer();
-				dr.print(data.getHtmlDoc());
+				dr.print(htmlDoc);
 				
 			}
 			else if(command.equals(CMD_DEBUG_DESCRIBE_DOC))
 			{
 				System.out.println("------------DOCUMENT------------");
-				System.out.println("Content Type : " + data.getJtpMain().getContentType());
-				System.out.println("Editor Kit   : " + data.getJtpMain().getEditorKit());
+				System.out.println("Content Type : " + jtpMain.getContentType());
+				System.out.println("Editor Kit   : " + jtpMain.getEditorKit());
 				System.out.println("Doc Tree     :");
 				System.out.println("");
-				describeDocument(data.getJtpMain().getStyledDocument());
+				describeDocument(jtpMain.getStyledDocument());
 				System.out.println("--------------------------------");
 				System.out.println("");
 			}
@@ -1263,11 +1400,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			{
 				System.out.println("-----------STYLESHEET-----------");
 				System.out.println("Stylesheet Rules");
-				Enumeration rules = data.getStyleSheet().getStyleNames();
+				Enumeration rules = styleSheet.getStyleNames();
 				while(rules.hasMoreElements())
 				{
 					String ruleName = (String)(rules.nextElement());
-					Style styleRule = data.getStyleSheet().getStyle(ruleName);
+					Style styleRule = styleSheet.getStyle(ruleName);
 					System.out.println(styleRule.toString());
 				}
 				System.out.println("--------------------------------");
@@ -1275,8 +1412,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			else if(command.equals(CMD_DEBUG_CURRENT_TAGS))
 			{
-				System.out.println("Caret Position : " + data.getJtpMain().getCaretPosition());
-				AttributeSet attribSet = data.getJtpMain().getCharacterAttributes();
+				System.out.println("Caret Position : " + jtpMain.getCaretPosition());
+				AttributeSet attribSet = jtpMain.getCharacterAttributes();
 				Enumeration attribs = attribSet.getAttributeNames();
 				System.out.println("Attributes     : ");
 				while(attribs.hasMoreElements())
@@ -1287,19 +1424,19 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			else if(command.equals(CMD_TOGGLE_TOOLBAR_SINGLE))
 			{
-				data.getjToolBar().setVisible(data.getJcbmiViewToolbar().isSelected());
+				jToolBar.setVisible(jcbmiViewToolbar.isSelected());
 			}
 			else if(command.equals(CMD_TOGGLE_TOOLBAR_MAIN))
 			{
-				data.getjToolBarMain().setVisible(data.getJcbmiViewToolbarMain().isSelected());
+				jToolBarMain.setVisible(jcbmiViewToolbarMain.isSelected());
 			}
 			else if(command.equals(CMD_TOGGLE_TOOLBAR_FORMAT))
 			{
-				data.getjToolBarFormat().setVisible(data.getJcbmiViewToolbarFormat().isSelected());
+				jToolBarFormat.setVisible(jcbmiViewToolbarFormat.isSelected());
 			}
 			else if(command.equals(CMD_TOGGLE_TOOLBAR_STYLES))
 			{
-				data.getjToolBarStyles().setVisible(data.getJcbmiViewToolbarStyles().isSelected());
+				jToolBarStyles.setVisible(jcbmiViewToolbarStyles.isSelected());
 			}
 			else if(command.equals(CMD_TOGGLE_SOURCE_VIEW))
 			{
@@ -1307,7 +1444,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			else if(command.equals(CMD_DOC_SERIALIZE_OUT))
 			{
-				serializeOut((HTMLDocument)(data.getJtpMain().getDocument()));
+				serializeOut((HTMLDocument)(jtpMain.getDocument()));
 			}
 			else if(command.equals(CMD_DOC_SERIALIZE_IN))
 			{
@@ -1459,15 +1596,15 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			else if(command.equals(CMD_SEARCH_FIND))
 			{
-				doSearch((String)null, (String)null, false, data.isLastSearchCaseSetting(), data.isLastSearchTopSetting());
+				doSearch((String)null, (String)null, false, lastSearchCaseSetting, lastSearchTopSetting);
 			}
 			else if(command.equals(CMD_SEARCH_FIND_AGAIN))
 			{
-				doSearch(data.getLastSearchFindTerm(), (String)null, false, data.isLastSearchCaseSetting(), false);
+				doSearch(lastSearchFindTerm, (String)null, false, lastSearchCaseSetting, false);
 			}
 			else if(command.equals(CMD_SEARCH_REPLACE))
 			{
-				doSearch((String)null, (String)null, true, data.isLastSearchCaseSetting(), data.isLastSearchTopSetting());
+				doSearch((String)null, (String)null, true, lastSearchCaseSetting, lastSearchTopSetting);
 			}
 			else if(command.equals(CMD_EXIT))
 			{
@@ -1487,7 +1624,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			else if(command.equals(CMD_SPELLCHECK))
 			{
-				checkDocumentSpelling(data.getJtpMain().getDocument());
+				checkDocumentSpelling(jtpMain.getDocument());
 			}
 		}
 		catch(IOException ioe)
@@ -1529,27 +1666,27 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			{
 				if(pos > 0)
 				{
-					if(data.getJtpMain().getSelectedText() != null)
+					if(jtpMain.getSelectedText() != null)
 					{
-						data.getHtmlUtilities().delete();
+						htmlUtilities.delete();
 						refreshOnUpdate();
 						return;
 					}
 					else
 					{
-						int sOffset = data.getHtmlDoc().getParagraphElement(pos).getStartOffset();
-						if(sOffset == data.getJtpMain().getSelectionStart())
+						int sOffset = htmlDoc.getParagraphElement(pos).getStartOffset();
+						if(sOffset == jtpMain.getSelectionStart())
 						{
 							boolean content = true;
-							if(data.getHtmlUtilities().checkParentsTag(HTML.Tag.LI))
+							if(htmlUtilities.checkParentsTag(HTML.Tag.LI))
 							{
-								elem = data.getHtmlUtilities().getListItemParent();
+								elem = htmlUtilities.getListItemParent();
 								content = false;
 								int so = elem.getStartOffset();
 								int eo = elem.getEndOffset();
 								if(so + 1 < eo)
 								{
-									char[] temp = data.getJtpMain().getText(so, eo - so).toCharArray();
+									char[] temp = jtpMain.getText(so, eo - so).toCharArray();
 									for(char c : temp)
 									{
 										if(!(new Character(c)).isWhitespace(c))
@@ -1560,27 +1697,27 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 								}
 								if(!content)
 								{
-									data.getHtmlUtilities().removeTag(elem, true);
+									htmlUtilities.removeTag(elem, true);
 									this.setCaretPosition(sOffset - 1);
 									refreshOnUpdate();
 									return;
 								}
 								else
 								{
-									data.getJtpMain().replaceSelection("");
+									jtpMain.replaceSelection("");
 									refreshOnUpdate();
 									return;
 								}
 							}
-							else if(data.getHtmlUtilities().checkParentsTag(HTML.Tag.TABLE))
+							else if(htmlUtilities.checkParentsTag(HTML.Tag.TABLE))
 							{
-								data.getJtpMain().setCaretPosition(data.getJtpMain().getCaretPosition() - 1);
+								jtpMain.setCaretPosition(jtpMain.getCaretPosition() - 1);
 								ke.consume();
 								refreshOnUpdate();
 								return;
 							}
 						}
-						data.getJtpMain().replaceSelection("");
+						jtpMain.replaceSelection("");
 						refreshOnUpdate();
 						return;
 					}
@@ -1601,9 +1738,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		{
 			try
 			{
-				if(data.getHtmlUtilities().checkParentsTag(HTML.Tag.UL) == true | data.getHtmlUtilities().checkParentsTag(HTML.Tag.OL) == true)
+				if(htmlUtilities.checkParentsTag(HTML.Tag.UL) == true | htmlUtilities.checkParentsTag(HTML.Tag.OL) == true)
 				{
-					elem = data.getHtmlUtilities().getListItemParent();
+					elem = htmlUtilities.getListItemParent();
 					int so = elem.getStartOffset();
 					int eo = elem.getEndOffset();
 					char[] temp = this.getTextPane().getText(so,eo-so).toCharArray();
@@ -1660,14 +1797,14 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 							{
 								this.getTextPane().select(caret, eo - 1);
 								this.getTextPane().replaceSelection("");
-								data.getHtmlUtilities().insertListElement(tempString);
-								Element newLi = data.getHtmlUtilities().getListItemParent();
+								htmlUtilities.insertListElement(tempString);
+								Element newLi = htmlUtilities.getListItemParent();
 								this.setCaretPosition(newLi.getEndOffset() - 1);
 							}
 						}
 					}
 				}
-				else if(data.isEnterIsBreak())
+				else if(enterIsBreak)
 				{
 					insertBreak();
 					ke.consume();
@@ -1685,17 +1822,17 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 		}
 	}
-	public void keyPressed(KeyEvent ke) { if(ke.getKeyChar() == KeyEvent.VK_ENTER && data.isEnterIsBreak()) { ke.consume(); } }
-	public void keyReleased(KeyEvent ke) { if(ke.getKeyChar() == KeyEvent.VK_ENTER && data.isEnterIsBreak()) { ke.consume(); } }
+	public void keyPressed(KeyEvent ke) { if(ke.getKeyChar() == KeyEvent.VK_ENTER && enterIsBreak) { ke.consume(); } }
+	public void keyReleased(KeyEvent ke) { if(ke.getKeyChar() == KeyEvent.VK_ENTER && enterIsBreak) { ke.consume(); } }
 
 	/* FocusListener methods */
 	public void focusGained(FocusEvent fe)
 	{
-		if(fe.getSource() == data.getJtpMain())
+		if(fe.getSource() == jtpMain)
 		{
 			setFormattersActive(true);
 		}
-		else if(fe.getSource() == data.getJtpSource())
+		else if(fe.getSource() == jtpSource)
 		{
 			setFormattersActive(false);
 		}
@@ -1708,21 +1845,21 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void removeUpdate(DocumentEvent de)	{ handleDocumentChange(de); }
 	public void handleDocumentChange(DocumentEvent de)
 	{
-		if(!data.isExclusiveEdit())
+		if(!exclusiveEdit)
 		{
 			if(isSourceWindowActive())
 			{
 				if(de.getDocument() instanceof HTMLDocument || de.getDocument() instanceof ExtendedHTMLDocument)
 				{
-					data.getJtpSource().getDocument().removeDocumentListener(this);
-					data.getJtpSource().setText(data.getJtpMain().getText());
-					data.getJtpSource().getDocument().addDocumentListener(this);
+					jtpSource.getDocument().removeDocumentListener(this);
+					jtpSource.setText(jtpMain.getText());
+					jtpSource.getDocument().addDocumentListener(this);
 				}
 				else if(de.getDocument() instanceof PlainDocument || de.getDocument() instanceof DefaultStyledDocument)
 				{
-					data.getJtpMain().getDocument().removeDocumentListener(this);
-					data.getJtpMain().setText(data.getJtpSource().getText());
-					data.getJtpMain().getDocument().addDocumentListener(this);
+					jtpMain.getDocument().removeDocumentListener(this);
+					jtpMain.setText(jtpSource.getText());
+					jtpMain.getDocument().addDocumentListener(this);
 				}
 			}
 		}
@@ -1733,10 +1870,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public void registerDocument(ExtendedHTMLDocument htmlDoc)
 	{
-		data.getJtpMain().setDocument(htmlDoc);
-		data.getJtpMain().getDocument().addUndoableEditListener(new CustomUndoableEditListener());
-		data.getJtpMain().getDocument().addDocumentListener(this);
-		data.getJtpMain().setCaretPosition(0);
+		jtpMain.setDocument(htmlDoc);
+		jtpMain.getDocument().addUndoableEditListener(new CustomUndoableEditListener());
+		jtpMain.getDocument().addDocumentListener(this);
+		jtpMain.setCaretPosition(0);
 		purgeUndos();
 		registerDocumentStyles();
 	}
@@ -1746,22 +1883,22 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public void registerDocumentStyles()
 	{
-		if(data.getJcmbStyleSelector() == null || data.getHtmlDoc() == null)
+		if(jcmbStyleSelector == null || htmlDoc == null)
 		{
 			return;
 		}
-		data.getJcmbStyleSelector().setEnabled(false);
-		data.getJcmbStyleSelector().removeAllItems();
-		data.getJcmbStyleSelector().addItem(Translatrix.getTranslationString("NoCSSStyle"));
-		for(Enumeration e = data.getHtmlDoc().getStyleNames(); e.hasMoreElements();)
+		jcmbStyleSelector.setEnabled(false);
+		jcmbStyleSelector.removeAllItems();
+		jcmbStyleSelector.addItem(Translatrix.getTranslationString("NoCSSStyle"));
+		for(Enumeration e = htmlDoc.getStyleNames(); e.hasMoreElements();)
 		{
 			String name = (String) e.nextElement();
 			if(name.length() > 0 && name.charAt(0) == '.')
 			{
-				data.getJcmbStyleSelector().addItem(name.substring(1));
+				jcmbStyleSelector.addItem(name.substring(1));
 			}
 		}
-		data.getJcmbStyleSelector().setEnabled(true);
+		jcmbStyleSelector.setEnabled(true);
 	}
 
 	/** Method for inserting list elements
@@ -1771,11 +1908,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(element.getParentElement().getName() == "ol")
 		{
-			data.getActionListOrdered().actionPerformed(new ActionEvent(new Object(), 0, "newListPoint"));
+			actionListOrdered.actionPerformed(new ActionEvent(new Object(), 0, "newListPoint"));
 		}
 		else
 		{
-			data.getActionListUnordered().actionPerformed(new ActionEvent(new Object(), 0, "newListPoint"));
+			actionListUnordered.actionPerformed(new ActionEvent(new Object(), 0, "newListPoint"));
 		}
 	}
 
@@ -1784,7 +1921,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void insertTable(Hashtable attribs, String[] fieldNames, String[] fieldTypes, String[] fieldValues)
 	throws IOException, BadLocationException, RuntimeException, NumberFormatException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
+		int caretPos = jtpMain.getCaretPosition();
 		StringBuffer compositeElement = new StringBuffer("<TABLE");
 		if(attribs != null && attribs.size() > 0)
 		{
@@ -1848,8 +1985,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			compositeElement.append("</TR>");
 		}
 		compositeElement.append("</TABLE>&nbsp;");
-		data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, compositeElement.toString(), 0, 0, HTML.Tag.TABLE);
-		data.getJtpMain().setCaretPosition(caretPos + 1);
+		htmlKit.insertHTML(htmlDoc, caretPos, compositeElement.toString(), 0, 0, HTML.Tag.TABLE);
+		jtpMain.setCaretPosition(caretPos + 1);
 		refreshOnUpdate();
 	}
 
@@ -1857,8 +1994,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void editTable()
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		Element	element = data.getHtmlDoc().getCharacterElement(caretPos);
+		int caretPos = jtpMain.getCaretPosition();
+		Element	element = htmlDoc.getCharacterElement(caretPos);
 		Element elementParent = element.getParentElement();
 		while(elementParent != null && !elementParent.getName().equals("table"))
 		{
@@ -1900,7 +2037,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 						mynew.addAttribute(fieldKeys[i],propValue);
 					}
 				}
-				data.getHtmlDoc().replaceAttributes(elementParent, mynew, HTML.Tag.TABLE);
+				htmlDoc.replaceAttributes(elementParent, mynew, HTML.Tag.TABLE);
 				refreshOnUpdate();
 			}
 			propertiesDialog.dispose();
@@ -1915,8 +2052,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void editCell()
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		Element	element = data.getHtmlDoc().getCharacterElement(caretPos);
+		int caretPos = jtpMain.getCaretPosition();
+		Element	element = htmlDoc.getCharacterElement(caretPos);
 		Element elementParent = element.getParentElement();
 		while(elementParent != null && !elementParent.getName().equals("td"))
 		{
@@ -1958,7 +2095,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 						mynew.addAttribute(fieldKeys[i],propValue);
 					}
 				}
-				data.getHtmlDoc().replaceAttributes(elementParent, mynew, HTML.Tag.TD);
+				htmlDoc.replaceAttributes(elementParent, mynew, HTML.Tag.TD);
 				refreshOnUpdate();
 			}
 			propertiesDialog.dispose();
@@ -1973,8 +2110,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void insertTableRow()
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		Element	element = data.getHtmlDoc().getCharacterElement(data.getJtpMain().getCaretPosition());
+		int caretPos = jtpMain.getCaretPosition();
+		Element	element = htmlDoc.getCharacterElement(jtpMain.getCaretPosition());
 		Element elementParent = element.getParentElement();
 		int startPoint  = -1;
 		int columnCount = -1;
@@ -1993,7 +2130,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		}
 		if(startPoint > -1 && columnCount > -1)
 		{
-			data.getJtpMain().setCaretPosition(startPoint);
+			jtpMain.setCaretPosition(startPoint);
 	 		StringBuffer sRow = new StringBuffer();
  			sRow.append("<TR>");
  			for(int i = 0; i < columnCount; i++)
@@ -2001,10 +2138,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
  				sRow.append("<TD></TD>");
  			}
  			sRow.append("</TR>");
- 			ActionEvent actionEvent = new ActionEvent(data.getJtpMain(), 0, "insertTableRow");
+ 			ActionEvent actionEvent = new ActionEvent(jtpMain, 0, "insertTableRow");
  			new HTMLEditorKit.InsertHTMLTextAction("insertTableRow", sRow.toString(), HTML.Tag.TABLE, HTML.Tag.TR).actionPerformed(actionEvent);
  			refreshOnUpdate();
- 			data.getJtpMain().setCaretPosition(caretPos);
+ 			jtpMain.setCaretPosition(caretPos);
  		}
 	}
 
@@ -2012,8 +2149,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void insertTableColumn()
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		Element	element = data.getHtmlDoc().getCharacterElement(data.getJtpMain().getCaretPosition());
+		int caretPos = jtpMain.getCaretPosition();
+		Element	element = htmlDoc.getCharacterElement(jtpMain.getCaretPosition());
 		Element elementParent = element.getParentElement();
 		int startPoint = -1;
 		int rowCount   = -1;
@@ -2032,7 +2169,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 				for(int i = 0; i < rowCells; i++)
 				{
 					Element currentCell = elementParent.getElement(i);
-					if(data.getJtpMain().getCaretPosition() >= currentCell.getStartOffset() && data.getJtpMain().getCaretPosition() <= currentCell.getEndOffset())
+					if(jtpMain.getCaretPosition() >= currentCell.getStartOffset() && jtpMain.getCaretPosition() <= currentCell.getEndOffset())
 					{
 						cellOffset = i;
 					}
@@ -2046,18 +2183,18 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		}
 		if(startPoint > -1 && rowCount > -1)
 		{
-			data.getJtpMain().setCaretPosition(startPoint);
+			jtpMain.setCaretPosition(startPoint);
 			String sCell = "<TD></TD>";
-			ActionEvent actionEvent = new ActionEvent(data.getJtpMain(), 0, "insertTableCell");
+			ActionEvent actionEvent = new ActionEvent(jtpMain, 0, "insertTableCell");
  			for(int i = 0; i < rowCount; i++)
  			{
  				Element row = elementParent.getElement(i);
  				Element whichCell = row.getElement(cellOffset);
- 				data.getJtpMain().setCaretPosition(whichCell.getStartOffset());
+ 				jtpMain.setCaretPosition(whichCell.getStartOffset());
 				new HTMLEditorKit.InsertHTMLTextAction("insertTableCell", sCell, HTML.Tag.TR, HTML.Tag.TD, HTML.Tag.TH, HTML.Tag.TD).actionPerformed(actionEvent);
  			}
  			refreshOnUpdate();
- 			data.getJtpMain().setCaretPosition(caretPos);
+ 			jtpMain.setCaretPosition(caretPos);
  		}
 	}
 
@@ -2066,7 +2203,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void insertTableCell()
 	{
 		String sCell = "<TD></TD>";
-		ActionEvent actionEvent = new ActionEvent(data.getJtpMain(), 0, "insertTableCell");
+		ActionEvent actionEvent = new ActionEvent(jtpMain, 0, "insertTableCell");
 		new HTMLEditorKit.InsertHTMLTextAction("insertTableCell", sCell, HTML.Tag.TR, HTML.Tag.TD, HTML.Tag.TH, HTML.Tag.TD).actionPerformed(actionEvent);
 		refreshOnUpdate();
 	}
@@ -2076,8 +2213,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void deleteTableRow()
 	throws BadLocationException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		Element	element = data.getHtmlDoc().getCharacterElement(data.getJtpMain().getCaretPosition());
+		int caretPos = jtpMain.getCaretPosition();
+		Element	element = htmlDoc.getCharacterElement(jtpMain.getCaretPosition());
 		Element elementParent = element.getParentElement();
 		int startPoint = -1;
 		int endPoint   = -1;
@@ -2096,15 +2233,15 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		}
 		if(startPoint > -1 && endPoint > startPoint)
 		{
-			data.getHtmlDoc().remove(startPoint, endPoint - startPoint);
-			data.getJtpMain().setDocument(data.getHtmlDoc());
-			registerDocument(data.getHtmlDoc());
+			htmlDoc.remove(startPoint, endPoint - startPoint);
+			jtpMain.setDocument(htmlDoc);
+			registerDocument(htmlDoc);
  			refreshOnUpdate();
- 			if(caretPos >= data.getHtmlDoc().getLength())
+ 			if(caretPos >= htmlDoc.getLength())
  			{
- 				caretPos = data.getHtmlDoc().getLength() - 1;
+ 				caretPos = htmlDoc.getLength() - 1;
  			}
- 			data.getJtpMain().setCaretPosition(caretPos);
+ 			jtpMain.setCaretPosition(caretPos);
  		}
 	}
 
@@ -2113,8 +2250,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void deleteTableColumn()
 	throws BadLocationException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		Element	element       = data.getHtmlDoc().getCharacterElement(data.getJtpMain().getCaretPosition());
+		int caretPos = jtpMain.getCaretPosition();
+		Element	element       = htmlDoc.getCharacterElement(jtpMain.getCaretPosition());
 		Element elementParent = element.getParentElement();
 		Element	elementCell   = (Element)null;
 		Element	elementRow    = (Element)null;
@@ -2167,25 +2304,25 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 					}
 					if(whichColumn==0)
 					{
-						data.getHtmlDoc().remove(columnCellStart, dif);
+						htmlDoc.remove(columnCellStart, dif);
 					}
 					else
 					{
-						data.getHtmlDoc().remove(columnCellStart-1, dif);
+						htmlDoc.remove(columnCellStart-1, dif);
 					}
 				}
-				data.getJtpMain().setDocument(data.getHtmlDoc());
-				registerDocument(data.getHtmlDoc());
+				jtpMain.setDocument(htmlDoc);
+				registerDocument(htmlDoc);
 	 			refreshOnUpdate();
-	 			if(mycaretPos >= data.getHtmlDoc().getLength())
+	 			if(mycaretPos >= htmlDoc.getLength())
 	 			{
-	 				mycaretPos = data.getHtmlDoc().getLength() - 1;
+	 				mycaretPos = htmlDoc.getLength() - 1;
 	 			}
 	 			if(mycaretPos < 1)
 	 			{
 	 				mycaretPos =  1;
  				}
-	 			data.getJtpMain().setCaretPosition(mycaretPos);
+	 			jtpMain.setCaretPosition(mycaretPos);
 			}
 		}
 	}
@@ -2195,9 +2332,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void insertBreak()
 	throws IOException, BadLocationException, RuntimeException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, "<BR>", 0, 0, HTML.Tag.BR);
-		data.getJtpMain().setCaretPosition(caretPos + 1);
+		int caretPos = jtpMain.getCaretPosition();
+		htmlKit.insertHTML(htmlDoc, caretPos, "<BR>", 0, 0, HTML.Tag.BR);
+		jtpMain.setCaretPosition(caretPos + 1);
 	}
 
 	/** Method for inserting a horizontal rule (HR) element
@@ -2205,9 +2342,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void insertHR()
 	throws IOException, BadLocationException, RuntimeException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, "<HR>", 0, 0, HTML.Tag.HR);
-		data.getJtpMain().setCaretPosition(caretPos + 1);
+		int caretPos = jtpMain.getCaretPosition();
+		htmlKit.insertHTML(htmlDoc, caretPos, "<HR>", 0, 0, HTML.Tag.HR);
+		jtpMain.setCaretPosition(caretPos + 1);
 	}
 
 	/** Method for opening the Unicode dialog
@@ -2223,11 +2360,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void insertUnicodeChar(String sChar)
 	throws IOException, BadLocationException, RuntimeException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
+		int caretPos = jtpMain.getCaretPosition();
 		if(sChar != null)
 		{
-			data.getHtmlDoc().insertString(caretPos, sChar, data.getJtpMain().getInputAttributes());
-			data.getJtpMain().setCaretPosition(caretPos + 1);
+			htmlDoc.insertString(caretPos, sChar, jtpMain.getInputAttributes());
+			jtpMain.setCaretPosition(caretPos + 1);
 		}
 	}
 
@@ -2236,9 +2373,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void insertNonbreakingSpace()
 	throws IOException, BadLocationException, RuntimeException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		data.getHtmlDoc().insertString(caretPos, "\240", data.getJtpMain().getInputAttributes());
-		data.getJtpMain().setCaretPosition(caretPos + 1);
+		int caretPos = jtpMain.getCaretPosition();
+		htmlDoc.insertString(caretPos, "\240", jtpMain.getInputAttributes());
+		jtpMain.setCaretPosition(caretPos + 1);
 	}
 
 	/** Method for inserting a form element
@@ -2246,7 +2383,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void insertFormElement(HTML.Tag baseTag, String baseElement, Hashtable attribs, String[] fieldNames, String[] fieldTypes, String[] fieldValues, boolean hasClosingTag)
 	throws IOException, BadLocationException, RuntimeException
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
+		int caretPos = jtpMain.getCaretPosition();
 		StringBuffer compositeElement = new StringBuffer("<" + baseElement);
 		if(attribs != null && attribs.size() > 0)
 		{
@@ -2297,9 +2434,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			propertiesDialog = null;
 		}
 		// --- Convenience for editing, this makes the FORM visible
-		if(data.isUseFormIndicator() && baseElement.equals("form"))
+		if(useFormIndicator && baseElement.equals("form"))
 		{
-			compositeElement.append(" bgcolor=" + '"' + data.getClrFormIndicator() + '"');
+			compositeElement.append(" bgcolor=" + '"' + clrFormIndicator + '"');
 		}
 		// --- END
 		compositeElement.append(">");
@@ -2317,7 +2454,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		{
 			compositeElement.append("<P>&nbsp;</P>");
 		}
-		data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, compositeElement.toString(), 0, 0, baseTag);
+		htmlKit.insertHTML(htmlDoc, caretPos, compositeElement.toString(), 0, 0, baseTag);
 		// jtpMain.setCaretPosition(caretPos + 1);
 		refreshOnUpdate();
 	}
@@ -2334,11 +2471,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public void removeEmptyListElement(Element element)
 	{
-		Element h = data.getHtmlUtilities().getListItemParent();
+		Element h = htmlUtilities.getListItemParent();
 		Element listPar = h.getParentElement();
 		if(h != null)
 		{
-			data.getHtmlUtilities().removeTag(h, true);
+			htmlUtilities.removeTag(h, true);
 			removeEmptyLists();
 			refreshOnUpdate();
 		}
@@ -2346,7 +2483,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 
 	public void removeEmptyLists()
 	{
-		javax.swing.text.ElementIterator ei = new javax.swing.text.ElementIterator(data.getHtmlDoc());
+		javax.swing.text.ElementIterator ei = new javax.swing.text.ElementIterator(htmlDoc);
 		Element ele;
 		while((ele = ei.next()) != null)
 		{
@@ -2362,7 +2499,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 				}
 				if(listChildren <= 0)
 				{
-					data.getHtmlUtilities().removeTag(ele, true);
+					htmlUtilities.removeTag(ele, true);
 				}
 			}
 		}
@@ -2374,10 +2511,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void doSearch(String searchFindTerm, String searchReplaceTerm, boolean bIsFindReplace, boolean bCaseSensitive, boolean bStartAtTop)
 	{
 		boolean bReplaceAll = false;
-		JTextComponent searchPane = (JTextComponent)data.getJtpMain();
-		if(data.getJspSource().isShowing() || data.getJtpSource().hasFocus())
+		JTextComponent searchPane = (JTextComponent)jtpMain;
+		if(jspSource.isShowing() || jtpSource.hasFocus())
 		{
-			searchPane = (JTextComponent)data.getJtpSource();
+			searchPane = (JTextComponent)jtpSource;
 		}
 		if(searchFindTerm == null || (bIsFindReplace && searchReplaceTerm == null))
 		{
@@ -2415,17 +2552,17 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 					new SimpleInfoDialog(this.getFrame(), "", true, Translatrix.getTranslationString("ErrorNoMatchFound") + ":\n" + searchFindTerm, SimpleInfoDialog.WARNING);
 				}
 			}
-			data.setLastSearchFindTerm(new String(searchFindTerm));
+			lastSearchFindTerm    = new String(searchFindTerm);
 			if(searchReplaceTerm != null)
 			{
-				data.setLastSearchReplaceTerm(new String(searchReplaceTerm));
+				lastSearchReplaceTerm = new String(searchReplaceTerm);
 			}
 			else
 			{
-				data.setLastSearchReplaceTerm((String)null);
+				lastSearchReplaceTerm = (String)null;
 			}
-			data.setLastSearchCaseSetting(bCaseSensitive);
-			data.setLastSearchTopSetting(bStartAtTop);
+			lastSearchCaseSetting = bCaseSensitive;
+			lastSearchTopSetting  = bStartAtTop;
 		}
 	}
 
@@ -2434,13 +2571,13 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private int findText(String findTerm, String replaceTerm, boolean bCaseSenstive, int iOffset)
 	{
 		JTextComponent jtpFindSource;
-		if(isSourceWindowActive() || data.getJtpSource().hasFocus())
+		if(isSourceWindowActive() || jtpSource.hasFocus())
 		{
-			jtpFindSource = (JTextComponent)data.getJtpSource();
+			jtpFindSource = (JTextComponent)jtpSource;
 		}
 		else
 		{
-			jtpFindSource = (JTextComponent)data.getJtpMain();
+			jtpFindSource = (JTextComponent)jtpMain;
 		}
 		int searchPlace = -1;
 		try
@@ -2490,14 +2627,14 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(whatImage == null)
 		{
-			getImageFromChooser(data.getImageChooserStartDir(), data.getExtsIMG(), Translatrix.getTranslationString("FiletypeIMG"));
+			getImageFromChooser(imageChooserStartDir, extsIMG, Translatrix.getTranslationString("FiletypeIMG"));
 		}
 		else
 		{
-			data.setImageChooserStartDir(whatImage.getParent().toString());
-			int caretPos = data.getJtpMain().getCaretPosition();
-			data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, "<IMG SRC=\"" + whatImage + "\">", 0, 0, HTML.Tag.IMG);
-			data.getJtpMain().setCaretPosition(caretPos + 1);
+			imageChooserStartDir = whatImage.getParent().toString();
+			int caretPos = jtpMain.getCaretPosition();
+			htmlKit.insertHTML(htmlDoc, caretPos, "<IMG SRC=\"" + whatImage + "\">", 0, 0, HTML.Tag.IMG);
+			jtpMain.setCaretPosition(caretPos + 1);
 			refreshOnUpdate();
 		}
 	}
@@ -2513,14 +2650,14 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		String whatImage = imgUrlDialog.getImageUrl();
 		if(whatImage != null && whatImage.length() > 0)
 		{
-			int caretPos = data.getJtpMain().getCaretPosition();
+			int caretPos = jtpMain.getCaretPosition();
 			String sImgTag = "<img src=\"" + whatImage + '"';
 			if(imgUrlDialog.getImageAlt() != null && imgUrlDialog.getImageAlt().length() > 0) { sImgTag = sImgTag + " alt=\"" + imgUrlDialog.getImageAlt() + '"'; }
 			if(imgUrlDialog.getImageWidth() != null && imgUrlDialog.getImageWidth().length() > 0) { sImgTag = sImgTag + " width=\"" + imgUrlDialog.getImageWidth() + '"'; }
 			if(imgUrlDialog.getImageHeight() != null && imgUrlDialog.getImageHeight().length() > 0) { sImgTag = sImgTag + " height=\"" + imgUrlDialog.getImageHeight() + '"'; }
 			sImgTag = sImgTag + "/>";
-			data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, sImgTag, 0, 0, HTML.Tag.IMG);
-			data.getJtpMain().setCaretPosition(caretPos + 1);
+			htmlKit.insertHTML(htmlDoc, caretPos, sImgTag, 0, 0, HTML.Tag.IMG);
+			jtpMain.setCaretPosition(caretPos + 1);
 			refreshOnUpdate();
 		}
 	}
@@ -2536,15 +2673,15 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(whatFile == null)
 		{
-			whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, data.getExtsHTML(), Translatrix.getTranslationString("FiletypeHTML"));
+			whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, extsHTML, Translatrix.getTranslationString("FiletypeHTML"));
 		}
 		if(whatFile != null)
 		{
 			FileWriter fw = new FileWriter(whatFile);
-			data.getHtmlKit().write(fw, doc, 0, doc.getLength());
+			htmlKit.write(fw, doc, 0, doc.getLength());
 			fw.flush();
 			fw.close();
-			data.setCurrentFile(whatFile);
+			currentFile = whatFile;
 			updateTitle();
 		}
 		refreshOnUpdate();
@@ -2556,14 +2693,14 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	throws IOException, BadLocationException
 	{
 		FileWriter fw = new FileWriter(fragFile);
-		String docTextCase = data.getJtpSource().getText().toLowerCase();
+		String docTextCase = jtpSource.getText().toLowerCase();
 		int tagStart       = docTextCase.indexOf("<" + containingTag.toLowerCase());
 		int tagStartClose  = docTextCase.indexOf(">", tagStart) + 1;
 		String closeTag    = "</" + containingTag.toLowerCase() + ">";
 		int tagEndOpen     = docTextCase.indexOf(closeTag);
 		if(tagStartClose < 0) { tagStartClose = 0; }
 		if(tagEndOpen < 0 || tagEndOpen > docTextCase.length()) { tagEndOpen = docTextCase.length(); }
-		String bodyText = data.getJtpSource().getText().substring(tagStartClose, tagEndOpen);
+		String bodyText = jtpSource.getText().substring(tagStartClose, tagEndOpen);
 		fw.write(bodyText, 0, bodyText.length());
 		fw.flush();
 		fw.close();
@@ -2573,7 +2710,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void writeOutFragment(HTMLDocument doc, String containingTag)
 	throws IOException, BadLocationException
 	{
-		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, data.getExtsHTML(), Translatrix.getTranslationString("FiletypeHTML"));
+		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, extsHTML, Translatrix.getTranslationString("FiletypeHTML"));
 		if(whatFile != null)
 		{
 			writeOutFragment(doc, containingTag, whatFile);
@@ -2596,7 +2733,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void writeOutRTF(StyledDocument doc)
 	throws IOException, BadLocationException
 	{
-		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, data.getExtsRTF(), Translatrix.getTranslationString("FiletypeRTF"));
+		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, extsRTF, Translatrix.getTranslationString("FiletypeRTF"));
 		if(whatFile != null)
 		{
 			writeOutRTF(doc, whatFile);
@@ -2606,7 +2743,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public String getRTFDocument()
 	throws IOException, BadLocationException
 	{
-		StyledDocument doc = (StyledDocument)(data.getJtpMain().getStyledDocument());
+		StyledDocument doc = (StyledDocument)(jtpMain.getStyledDocument());
 		StringWriter strwriter = new StringWriter();
 		RTFEditorKit rtfKit = new RTFEditorKit();
 		rtfKit.write(strwriter, doc, 0, doc.getLength());
@@ -2629,7 +2766,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void writeOutBase64(String text)
 	throws IOException, BadLocationException
 	{
-		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, data.getExtsB64(), Translatrix.getTranslationString("FiletypeB64"));
+		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, extsB64, Translatrix.getTranslationString("FiletypeB64"));
 		if(whatFile != null)
 		{
 			writeOutBase64(text, whatFile);
@@ -2644,7 +2781,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void saveDocument()
 	throws IOException, BadLocationException
 	{
-		writeOut((HTMLDocument)(data.getJtpMain().getDocument()), data.getCurrentFile());
+		writeOut((HTMLDocument)(jtpMain.getDocument()), currentFile);
 	}
 
 	/**
@@ -2669,7 +2806,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(whatFile == null)
 		{
-			whatFile = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, data.getExtsHTML(), Translatrix.getTranslationString("FiletypeHTML"));
+			whatFile = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, extsHTML, Translatrix.getTranslationString("FiletypeHTML"));
 		}
 		if(whatFile != null)
 		{
@@ -2727,8 +2864,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		Reader rp = null;
 		Reader rr = null;
-		data.setHtmlDoc((ExtendedHTMLDocument)(data.getHtmlKit().createDefaultDocument()));
-		data.getHtmlDoc().putProperty("com.hexidec.ekit.docsource", whatFile.toString());
+		htmlDoc = (ExtendedHTMLDocument)(htmlKit.createDefaultDocument());
+		htmlDoc.putProperty("com.hexidec.ekit.docsource", whatFile.toString());
 		try
 		{
 			if(whatEncoding == null)
@@ -2741,18 +2878,18 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 				rp = new InputStreamReader(new FileInputStream(whatFile), whatEncoding);
 				rr = new InputStreamReader(new FileInputStream(whatFile), whatEncoding);
 			}
-			data.getHtmlDoc().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-			data.getHtmlDoc().setPreservesUnknownTags(data.isPreserveUnknownTags());
+			htmlDoc.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
+			htmlDoc.setPreservesUnknownTags(preserveUnknownTags);
 			if(cb != null)
 			{
-				HTMLEditorKit.Parser parser = data.getHtmlDoc().getParser();
+				HTMLEditorKit.Parser parser = htmlDoc.getParser();
 				parser.parse(rp, cb, true);
 				rp.close();
 			}
-			data.getHtmlKit().read(rr, data.getHtmlDoc(), 0);
-			registerDocument(data.getHtmlDoc());
-			data.getJtpSource().setText(data.getJtpMain().getText());
-			data.setCurrentFile(whatFile);
+			htmlKit.read(rr, htmlDoc, 0);
+			registerDocument(htmlDoc);
+			jtpSource.setText(jtpMain.getText());
+			currentFile = whatFile;
 			updateTitle();
 		}
 		finally
@@ -2771,7 +2908,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(whatFile == null)
 		{
-			whatFile = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, data.getExtsB64(), Translatrix.getTranslationString("FiletypeB64"));
+			whatFile = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, extsB64, Translatrix.getTranslationString("FiletypeB64"));
 		}
 		if(whatFile != null)
 		{
@@ -2785,9 +2922,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 					encodedText.append((char)nextChar);
 				}
 				fr.close();
-				data.getJtpSource().setText(Base64Codec.decode(encodedText.toString()));
-				data.getJtpMain().setText(data.getJtpSource().getText());
-				registerDocument((ExtendedHTMLDocument)(data.getJtpMain().getDocument()));
+				jtpSource.setText(Base64Codec.decode(encodedText.toString()));
+				jtpMain.setText(jtpSource.getText());
+				registerDocument((ExtendedHTMLDocument)(jtpMain.getDocument()));
 			}
 			finally
 			{
@@ -2806,24 +2943,24 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(fileCSS == null)
 		{
-			fileCSS = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, data.getExtsCSS(), Translatrix.getTranslationString("FiletypeCSS"));
+			fileCSS = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, extsCSS, Translatrix.getTranslationString("FiletypeCSS"));
 		}
 		if(fileCSS != null)
 		{
-			String currDocText = data.getJtpMain().getText();
-			data.setHtmlDoc((ExtendedHTMLDocument)(data.getHtmlKit().createDefaultDocument()));
-			data.getHtmlDoc().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-			data.getHtmlDoc().setPreservesUnknownTags(data.isPreserveUnknownTags());
-			data.setStyleSheet(data.getHtmlDoc().getStyleSheet());
+			String currDocText = jtpMain.getText();
+			htmlDoc = (ExtendedHTMLDocument)(htmlKit.createDefaultDocument());
+			htmlDoc.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
+			htmlDoc.setPreservesUnknownTags(preserveUnknownTags);
+			styleSheet = htmlDoc.getStyleSheet();
 			URL cssUrl = fileCSS.toURI().toURL();
 			InputStream is = cssUrl.openStream();
 			BufferedReader br = new BufferedReader(new InputStreamReader(is));
-			data.getStyleSheet().loadRules(br, cssUrl);
+			styleSheet.loadRules(br, cssUrl);
 			br.close();
-			data.setHtmlDoc(new ExtendedHTMLDocument(data.getStyleSheet()));
-			registerDocument(data.getHtmlDoc());
-			data.getJtpMain().setText(currDocText);
-			data.getJtpSource().setText(data.getJtpMain().getText());
+			htmlDoc = new ExtendedHTMLDocument(styleSheet);
+			registerDocument(htmlDoc);
+			jtpMain.setText(currDocText);
+			jtpSource.setText(jtpMain.getText());
 		}
 		refreshOnUpdate();
 	}
@@ -2833,7 +2970,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void serializeOut(HTMLDocument doc)
 	throws IOException
 	{
-		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, data.getExtsSer(), Translatrix.getTranslationString("FiletypeSer"));
+		File whatFile = getFileFromChooser(".", JFileChooser.SAVE_DIALOG, extsSer, Translatrix.getTranslationString("FiletypeSer"));
 		if(whatFile != null)
 		{
 			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(whatFile));
@@ -2849,13 +2986,13 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	public void serializeIn()
 	throws IOException, ClassNotFoundException
 	{
-		File whatFile = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, data.getExtsSer(), Translatrix.getTranslationString("FiletypeSer"));
+		File whatFile = getFileFromChooser(".", JFileChooser.OPEN_DIALOG, extsSer, Translatrix.getTranslationString("FiletypeSer"));
 		if(whatFile != null)
 		{
 			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(whatFile));
-			data.setHtmlDoc((ExtendedHTMLDocument)(ois.readObject()));
+			htmlDoc = (ExtendedHTMLDocument)(ois.readObject());
 			ois.close();
-			registerDocument(data.getHtmlDoc());
+			registerDocument(htmlDoc);
 			validate();
 		}
 		refreshOnUpdate();
@@ -2902,15 +3039,15 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 				File whatImage = imgFileDialog.getImageFile();
 				if(whatImage != null)
 				{
-					data.setImageChooserStartDir(whatImage.getParent().toString());
-					int caretPos = data.getJtpMain().getCaretPosition();
+					imageChooserStartDir = whatImage.getParent().toString();
+					int caretPos = jtpMain.getCaretPosition();
 					String sImgTag = "<img src=\"" + whatImage + '"';
 					if(imgFileDialog.getImageAlt() != null && imgFileDialog.getImageAlt().length() > 0) { sImgTag = sImgTag + " alt=\"" + imgFileDialog.getImageAlt() + '"'; }
 					if(imgFileDialog.getImageWidth() != null && imgFileDialog.getImageWidth().length() > 0) { sImgTag = sImgTag + " width=\"" + imgFileDialog.getImageWidth() + '"'; }
 					if(imgFileDialog.getImageHeight() != null && imgFileDialog.getImageHeight().length() > 0) { sImgTag = sImgTag + " height=\"" + imgFileDialog.getImageHeight() + '"'; }
 					sImgTag = sImgTag + "/>";
-					data.getHtmlKit().insertHTML(data.getHtmlDoc(), caretPos, sImgTag, 0, 0, HTML.Tag.IMG);
-					data.getJtpMain().setCaretPosition(caretPos + 1);
+					htmlKit.insertHTML(htmlDoc, caretPos, sImgTag, 0, 0, HTML.Tag.IMG);
+					jtpMain.setCaretPosition(caretPos + 1);
 					refreshOnUpdate();
 				}
 			}
@@ -2930,8 +3067,8 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		Element[] elements = doc.getRootElements();
 		for(Element elem : elements)
 		{
-			data.setIndent(data.getIndentStep());
-			for(int j = 0; j < data.getIndent(); j++) { System.out.print(" "); }
+			indent = indentStep;
+			for(int j = 0; j < indent; j++) { System.out.print(" "); }
 			System.out.print(elem);
 			traverseElement(elem);
 			System.out.println("");
@@ -2942,75 +3079,66 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void traverseElement(Element element)
 	{
-		data.setIndent(data.getIndentStep());
+		indent += indentStep;
 		for(int i = 0; i < element.getElementCount(); i++)
 		{
-			for(int j = 0; j < data.getIndent(); j++) { System.out.print(" "); }
+			for(int j = 0; j < indent; j++) { System.out.print(" "); }
 			System.out.print(element.getElement(i));
 			traverseElement(element.getElement(i));
 		}
-		data.setIndent(data.getIndentStep());
+		indent -= indentStep;
 	}
 
 	/** Convenience method for obtaining the WYSIWYG JTextPane
 	  */
 	public JTextPane getTextPane()
 	{
-		return data.getJtpMain();
+		return jtpMain;
 	}
 
 	/** Convenience method for obtaining the Source JTextPane
 	  */
 	public JTextArea getSourcePane()
 	{
-		return data.getJtpSource();
+		return jtpSource;
 	}
 
 	/** Convenience method for obtaining the application as a Frame
 	  */
 	public Frame getFrame()
 	{
-		return data.getFrameHandler();
+		return frameHandler;
 	}
 
 	/** Convenience method for setting the parent Frame
 	  */
 	public void setFrame(Frame parentFrame)
 	{
-		data.setFrameHandler(parentFrame);
+		frameHandler = parentFrame;
 	}
 
 	/** Convenience method for obtaining the pre-generated menu bar
 	  */
 	public JMenuBar getMenuBar()
 	{
-		return data.getjMenuBar();
-	}
-	
-	/** Convenience method for obtaining htMenus
-	 */
-	public Hashtable<String, JMenu> getHTMenus()
-	{
-		return htMenus;
+		return jMenuBar;
 	}
 
 	/** Convenience method for obtaining a custom menu bar
 	  */
 	public JMenuBar getCustomMenuBar(Vector<String> vcMenus)
 	{
-		data.setjMenuBar(new JMenuBar());
+		jMenuBar = new JMenuBar();
 		for(int i = 0; i < vcMenus.size(); i++)
 		{
 			String menuToAdd = vcMenus.elementAt(i).toLowerCase();
 			if(htMenus.containsKey(menuToAdd))
 			{
-				data.getjMenuBar().add((JMenu)(htMenus.get(menuToAdd)));
+				jMenuBar.add((JMenu)(htMenus.get(menuToAdd)));
 			}
 		}
-		return data.getjMenuBar();
+		return jMenuBar;
 	}
-	
-	
 
 	/** Convenience method for creating the multiple toolbar set from a sequence string
 	  */
@@ -3071,10 +3199,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public JToolBar getToolBar(boolean isShowing)
 	{
-		if(data.getjToolBar() != null)
+		if(jToolBar != null)
 		{
-			data.getJcbmiViewToolbar().setState(isShowing);
-			return data.getjToolBar();
+			jcbmiViewToolbar.setState(isShowing);
+			return jToolBar;
 		}
 		return (JToolBar)null;
 	}
@@ -3083,10 +3211,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public JToolBar getToolBarMain(boolean isShowing)
 	{
-		if(data.getjToolBarMain() != null)
+		if(jToolBarMain != null)
 		{
-			data.getJcbmiViewToolbarMain().setState(isShowing);
-			return data.getjToolBarMain();
+			jcbmiViewToolbarMain.setState(isShowing);
+			return jToolBarMain;
 		}
 		return (JToolBar)null;
 	}
@@ -3095,10 +3223,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public JToolBar getToolBarFormat(boolean isShowing)
 	{
-		if(data.getjToolBarFormat() != null)
+		if(jToolBarFormat != null)
 		{
-			data.getJcbmiViewToolbarFormat().setState(isShowing);
-			return data.getjToolBarFormat();
+			jcbmiViewToolbarFormat.setState(isShowing);
+			return jToolBarFormat;
 		}
 		return (JToolBar)null;
 	}
@@ -3107,10 +3235,10 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public JToolBar getToolBarStyles(boolean isShowing)
 	{
-		if(data.getjToolBarStyles() != null)
+		if(jToolBarStyles != null)
 		{
-			data.getJcbmiViewToolbarStyles().setState(isShowing);
-			return data.getjToolBarStyles();
+			jcbmiViewToolbarStyles.setState(isShowing);
+			return jToolBarStyles;
 		}
 		return (JToolBar)null;
 	}
@@ -3150,38 +3278,38 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		}
 		if(whichToolBar == TOOLBAR_SINGLE)
 		{
-			data.setjToolBar(jToolBarX);
-			data.getjToolBar().setVisible(isShowing);
-			data.getJcbmiViewToolbar().setSelected(isShowing);
-			return data.getjToolBar();
+			jToolBar = jToolBarX;
+			jToolBar.setVisible(isShowing);
+			jcbmiViewToolbar.setSelected(isShowing);
+			return jToolBar;
 		}
 		else if(whichToolBar == TOOLBAR_MAIN)
 		{
-			data.setjToolBarMain(jToolBarX);
-			data.getjToolBarMain().setVisible(isShowing);
-			data.getJcbmiViewToolbarMain().setSelected(isShowing);
-			return data.getjToolBarMain();
+			jToolBarMain = jToolBarX;
+			jToolBarMain.setVisible(isShowing);
+			jcbmiViewToolbarMain.setSelected(isShowing);
+			return jToolBarMain;
 		}
 		else if(whichToolBar == TOOLBAR_FORMAT)
 		{
-			data.setjToolBarFormat(jToolBarX);
-			data.getjToolBarFormat().setVisible(isShowing);
-			data.getJcbmiViewToolbarFormat().setSelected(isShowing);
-			return data.getjToolBarFormat();
+			jToolBarFormat = jToolBarX;
+			jToolBarFormat.setVisible(isShowing);
+			jcbmiViewToolbarFormat.setSelected(isShowing);
+			return jToolBarFormat;
 		}
 		else if(whichToolBar == TOOLBAR_STYLES)
 		{
-			data.setjToolBarStyles(jToolBarX);
-			data.getjToolBarStyles().setVisible(isShowing);
-			data.getJcbmiViewToolbarStyles().setSelected(isShowing);
-			return data.getjToolBarStyles();
+			jToolBarStyles = jToolBarX;
+			jToolBarStyles.setVisible(isShowing);
+			jcbmiViewToolbarStyles.setSelected(isShowing);
+			return jToolBarStyles;
 		}
 		else
 		{
-			data.setjToolBarMain(jToolBarX);
-			data.getjToolBarMain().setVisible(isShowing);
-			data.getJcbmiViewToolbarMain().setSelected(isShowing);
-			return data.getjToolBarMain();
+			jToolBarMain = jToolBarX;
+			jToolBarMain.setVisible(isShowing);
+			jcbmiViewToolbarMain.setSelected(isShowing);
+			return jToolBarMain;
 		}
 	}
 
@@ -3190,43 +3318,43 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void setFormattersActive(boolean state)
 	{
-		data.getActionFontBold().setEnabled(state);
-		data.getActionFontItalic().setEnabled(state);
-		data.getActionFontUnderline().setEnabled(state);
-		data.getActionFontStrike().setEnabled(state);
-		data.getActionFontSuperscript().setEnabled(state);
-		data.getActionFontSubscript().setEnabled(state);
-		data.getActionListUnordered().setEnabled(state);
-		data.getActionListOrdered().setEnabled(state);
-		data.getActionSelectFont().setEnabled(state);
-		data.getActionAlignLeft().setEnabled(state);
-		data.getActionAlignCenter().setEnabled(state);
-		data.getActionAlignRight().setEnabled(state);
-		data.getActionAlignJustified().setEnabled(state);
-		data.getActionInsertAnchor().setEnabled(state);
-		data.getJbtnUnicode().setEnabled(state);
-		data.getJbtnUnicodeMath().setEnabled(state);
-		data.getJcmbStyleSelector().setEnabled(state);
-		data.getJcmbFontSelector().setEnabled(state);
-		data.getjMenuFont().setEnabled(state);
-		data.getjMenuFormat().setEnabled(state);
-		data.getjMenuInsert().setEnabled(state);
-		data.getjMenuTable().setEnabled(state);
-		data.getjMenuForms().setEnabled(state);
+		actionFontBold.setEnabled(state);
+		actionFontItalic.setEnabled(state);
+		actionFontUnderline.setEnabled(state);
+		actionFontStrike.setEnabled(state);
+		actionFontSuperscript.setEnabled(state);
+		actionFontSubscript.setEnabled(state);
+		actionListUnordered.setEnabled(state);
+		actionListOrdered.setEnabled(state);
+		actionSelectFont.setEnabled(state);
+		actionAlignLeft.setEnabled(state);
+		actionAlignCenter.setEnabled(state);
+		actionAlignRight.setEnabled(state);
+		actionAlignJustified.setEnabled(state);
+		actionInsertAnchor.setEnabled(state);
+		jbtnUnicode.setEnabled(state);
+		jbtnUnicodeMath.setEnabled(state);
+		jcmbStyleSelector.setEnabled(state);
+		jcmbFontSelector.setEnabled(state);
+		jMenuFont.setEnabled(state);
+		jMenuFormat.setEnabled(state);
+		jMenuInsert.setEnabled(state);
+		jMenuTable.setEnabled(state);
+		jMenuForms.setEnabled(state);
 	}
 
 	/** Convenience method for obtaining the current file handle
 	  */
 	public File getCurrentFile()
 	{
-		return data.getCurrentFile();
+		return currentFile;
 	}
 
 	/** Convenience method for obtaining the application name
 	  */
 	public String getAppName()
 	{
-		return data.getAppName();
+		return appName;
 	}
 
 	/** Convenience method for obtaining the document text
@@ -3235,11 +3363,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(isSourceWindowActive())
 		{
-			return data.getJtpSource().getText();
+			return jtpSource.getText();
 		}
 		else
 		{
-			return data.getJtpMain().getText();
+			return jtpMain.getText();
 		}
 	}
 
@@ -3255,15 +3383,15 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private String getSubText(String containingTag)
 	{
-		data.getJtpSource().setText(data.getJtpMain().getText());
-		String docTextCase = data.getJtpSource().getText().toLowerCase();
+		jtpSource.setText(jtpMain.getText());
+		String docTextCase = jtpSource.getText().toLowerCase();
 		int tagStart       = docTextCase.indexOf("<" + containingTag.toLowerCase());
 		int tagStartClose  = docTextCase.indexOf(">", tagStart) + 1;
 		String closeTag    = "</" + containingTag.toLowerCase() + ">";
 		int tagEndOpen     = docTextCase.indexOf(closeTag);
 		if(tagStartClose < 0) { tagStartClose = 0; }
 		if(tagEndOpen < 0 || tagEndOpen > docTextCase.length()) { tagEndOpen = docTextCase.length(); }
-		return data.getJtpSource().getText().substring(tagStartClose, tagEndOpen);
+		return jtpSource.getText().substring(tagStartClose, tagEndOpen);
 	}
 
 	/** Convenience method for obtaining the document text
@@ -3278,33 +3406,33 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public void setDocumentText(String sText)
 	{
-		data.getJtpMain().setText(sText);
-		((HTMLEditorKit)(data.getJtpMain().getEditorKit())).setDefaultCursor(new Cursor(Cursor.TEXT_CURSOR));
-		data.getJtpSource().setText(data.getJtpMain().getText());
+		jtpMain.setText(sText);
+		((HTMLEditorKit)(jtpMain.getEditorKit())).setDefaultCursor(new Cursor(Cursor.TEXT_CURSOR));
+		jtpSource.setText(jtpMain.getText());
 	}
 
 	/** Convenience method for setting the source document
 	  */
 	public void setSourceDocument(StyledDocument sDoc)
 	{
-		data.getJtpSource().getDocument().removeDocumentListener(this);
-		data.getJtpSource().setDocument(sDoc);
-		data.getJtpSource().getDocument().addDocumentListener(this);
-		data.getJtpMain().setText(data.getJtpSource().getText());
-		((HTMLEditorKit)(data.getJtpMain().getEditorKit())).setDefaultCursor(new Cursor(Cursor.TEXT_CURSOR));
+		jtpSource.getDocument().removeDocumentListener(this);
+		jtpSource.setDocument(sDoc);
+		jtpSource.getDocument().addDocumentListener(this);
+		jtpMain.setText(jtpSource.getText());
+		((HTMLEditorKit)(jtpMain.getEditorKit())).setDefaultCursor(new Cursor(Cursor.TEXT_CURSOR));
 	}
 
 	/** Convenience method for communicating the current font selection to the CustomAction class
 	  */
 	public String getFontNameFromSelector()
 	{
-		if(data.getJcmbFontSelector() == null || data.getJcmbFontSelector().getSelectedItem().equals(Translatrix.getTranslationString("SelectorToolFontsDefaultFont")))
+		if(jcmbFontSelector == null || jcmbFontSelector.getSelectedItem().equals(Translatrix.getTranslationString("SelectorToolFontsDefaultFont")))
 		{
 			return (String)null;
 		}
 		else
 		{
-			return data.getJcmbFontSelector().getSelectedItem().toString();
+			return jcmbFontSelector.getSelectedItem().toString();
 		}
 	}
 
@@ -3312,18 +3440,18 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private void updateTitle()
 	{
-		data.getFrameHandler().setTitle(data.getAppName() + (data.getCurrentFile() == null ? "" : " - " + data.getCurrentFile().getName()));
+		frameHandler.setTitle(appName + (currentFile == null ? "" : " - " + currentFile.getName()));
 	}
 
 	/** Convenience method for clearing out the UndoManager
 	  */
 	public void purgeUndos()
 	{
-		if(data.getUndoMngr() != null)
+		if(undoMngr != null)
 		{
-			data.getUndoMngr().discardAllEdits();
-			data.getUndoAction().updateUndoState();
-			data.getRedoAction().updateRedoState();
+			undoMngr.discardAllEdits();
+			undoAction.updateUndoState();
+			redoAction.updateRedoState();
 		}
 	}
 
@@ -3331,11 +3459,11 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public void refreshOnUpdate()
 	{
-		int caretPos = data.getJtpMain().getCaretPosition();
-		data.getJtpMain().setText(data.getJtpMain().getText());
-		data.getJtpSource().setText(data.getJtpMain().getText());
-		data.getJtpMain().setText(data.getJtpSource().getText());
-		try { data.getJtpMain().setCaretPosition(caretPos); } catch(IllegalArgumentException iea) { /* caret position bad, probably follows a deletion */ }
+		int caretPos = jtpMain.getCaretPosition();
+		jtpMain.setText(jtpMain.getText());
+		jtpSource.setText(jtpMain.getText());
+		jtpMain.setText(jtpSource.getText());
+		try { jtpMain.setCaretPosition(caretPos); } catch(IllegalArgumentException iea) { /* caret position bad, probably follows a deletion */ }
 		this.repaint();
 	}
 
@@ -3343,7 +3471,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public void dispose()
 	{
-		data.getFrameHandler().dispose();
+		frameHandler.dispose();
 		System.exit(0);
 	}
 
@@ -3376,7 +3504,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	private boolean isSourceWindowActive()
 	{
-		return (data.getJspSource() != null && data.getJspSource() == data.getJspltDisplay().getRightComponent());
+		return (jspSource != null && jspSource == jspltDisplay.getRightComponent());
 	}
 
 	/** Method for toggling source window visibility
@@ -3385,30 +3513,30 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		if(!(isSourceWindowActive()))
 		{
-			data.getJtpSource().setText(data.getJtpMain().getText());
-			data.getJspltDisplay().setRightComponent(data.getJspSource());
-			if(data.isExclusiveEdit())
+			jtpSource.setText(jtpMain.getText());
+			jspltDisplay.setRightComponent(jspSource);
+			if(exclusiveEdit)
 			{
-				data.getJspltDisplay().setDividerLocation(0);
-				data.getJspltDisplay().setEnabled(false);
-				data.getJtpSource().requestFocus();
+				jspltDisplay.setDividerLocation(0);
+				jspltDisplay.setEnabled(false);
+				jtpSource.requestFocus();
 			}
 			else
 			{
-				data.getJspltDisplay().setDividerLocation(data.getiSplitPos());
-				data.getJspltDisplay().setEnabled(true);
+				jspltDisplay.setDividerLocation(iSplitPos);
+				jspltDisplay.setEnabled(true);
 			}
 		}
 		else
 		{
-			data.getJtpMain().setText(data.getJtpSource().getText());
-			data.setiSplitPos(data.getJspltDisplay().getDividerLocation());
-			data.getJspltDisplay().remove(data.getJspSource());
-			data.getJtpMain().requestFocus();
+			jtpMain.setText(jtpSource.getText());
+			iSplitPos = jspltDisplay.getDividerLocation();
+			jspltDisplay.remove(jspSource);
+			jtpMain.requestFocus();
 		}
 		this.validate();
-		data.getJcbmiViewSource().setSelected(isSourceWindowActive());
-		data.getJtbtnViewSource().setSelected(isSourceWindowActive());
+		jcbmiViewSource.setSelected(isSourceWindowActive());
+		jtbtnViewSource.setSelected(isSourceWindowActive());
 	}
 
 	/** Searches the specified element for CLASS attribute setting
@@ -3451,7 +3579,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	private void handleCaretPositionChange(CaretEvent ce)
 	{
 		int caretPos = ce.getDot();
-		Element	element = data.getHtmlDoc().getCharacterElement(caretPos);
+		Element	element = htmlDoc.getCharacterElement(caretPos);
 /*
 //---- TAG EXPLICATOR CODE -------------------------------------------
 		javax.swing.text.ElementIterator ei = new javax.swing.text.ElementIterator(htmlDoc);
@@ -3482,7 +3610,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		}
 //---- END -------------------------------------------
 */
-		if(data.getJtpMain().hasFocus())
+		if(jtpMain.hasFocus())
 		{
 			if(element == null)
 			{
@@ -3502,9 +3630,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			int stylefound = -1;
 			if(style != null)
 			{
-				for(int i = 0; i < data.getJcmbStyleSelector().getItemCount(); i++)
+				for(int i = 0; i < jcmbStyleSelector.getItemCount(); i++)
 				{
-					String in = (String)(data.getJcmbStyleSelector().getItemAt(i));
+					String in = (String)(jcmbStyleSelector.getItemAt(i));
 					if(in.equalsIgnoreCase(style))
 					{
 						stylefound = i;
@@ -3514,18 +3642,18 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			}
 			if(stylefound > -1)
 			{
-				data.getJcmbStyleSelector().getAction().setEnabled(false);
-				data.getJcmbStyleSelector().setSelectedIndex(stylefound);
-				data.getJcmbStyleSelector().getAction().setEnabled(true);
+				jcmbStyleSelector.getAction().setEnabled(false);
+				jcmbStyleSelector.setSelectedIndex(stylefound);
+				jcmbStyleSelector.getAction().setEnabled(true);
 			}
 			else
 			{
-				data.getJcmbStyleSelector().setSelectedIndex(0);
+				jcmbStyleSelector.setSelectedIndex(0);
 			}
 			// see if current font face is set
-			if(data.getJcmbFontSelector() != null && data.getJcmbFontSelector().isVisible())
+			if(jcmbFontSelector != null && jcmbFontSelector.isVisible())
 			{
-				AttributeSet mainAttrs = data.getJtpMain().getCharacterAttributes();
+				AttributeSet mainAttrs = jtpMain.getCharacterAttributes();
 				Enumeration e = mainAttrs.getAttributeNames();
 				Object activeFontName = (Object)(Translatrix.getTranslationString("SelectorToolFontsDefaultFont"));
 				while(e.hasMoreElements())
@@ -3537,9 +3665,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 						break;
 					}
 				}
-				data.getJcmbFontSelector().getAction().setEnabled(false);
-				data.getJcmbFontSelector().getModel().setSelectedItem(activeFontName);
-				data.getJcmbFontSelector().getAction().setEnabled(true);
+				jcmbFontSelector.getAction().setEnabled(false);
+				jcmbFontSelector.getModel().setSelectedItem(activeFontName);
+				jcmbFontSelector.getAction().setEnabled(true);
 			}
 		}
 	}
@@ -3548,12 +3676,12 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	public ExtendedHTMLDocument getExtendedHtmlDoc()
 	{
-		return (ExtendedHTMLDocument)data.getHtmlDoc();
+		return (ExtendedHTMLDocument)htmlDoc;
 	}
 
 	public int getCaretPosition()
 	{
-		return data.getJtpMain().getCaretPosition();
+		return jtpMain.getCaretPosition();
 	}
 
 	public void setCaretPosition(int newPositon)
@@ -3564,7 +3692,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 			end = true;
 			try
 			{
-				data.getJtpMain().setCaretPosition(newPositon);
+				jtpMain.setCaretPosition(newPositon);
 			}
 			catch(IllegalArgumentException iae)
 			{
@@ -3578,14 +3706,14 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	  */
 	  public boolean getEnterKeyIsBreak()
 	  {
-	  	return data.isEnterIsBreak();
+	  	return enterIsBreak;
 	  }
 
 	  public void setEnterKeyIsBreak(boolean b)
 	  {
-	  	data.setEnterIsBreak(b);
-		data.getJcbmiEnterKeyParag().setSelected(!data.isEnterIsBreak());
-		data.getJcbmiEnterKeyBreak().setSelected(data.isEnterIsBreak());
+	  	enterIsBreak = b;
+		jcbmiEnterKeyParag.setSelected(!enterIsBreak);
+		jcbmiEnterKeyBreak.setSelected(enterIsBreak);
 	  }
 
 /* Inner Classes --------------------------------------------- */
@@ -3604,19 +3732,19 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		{
 			try
 			{
-				data.getUndoMngr().undo();
+				undoMngr.undo();
 			}
 			catch(CannotUndoException ex)
 			{
 				ex.printStackTrace();
 			}
 			updateUndoState();
-			data.getRedoAction().updateRedoState();
+			redoAction.updateRedoState();
 		}
 
 		protected void updateUndoState()
 		{
-			setEnabled(data.getUndoMngr().canUndo());
+			setEnabled(undoMngr.canUndo());
 		}
 	}
 
@@ -3634,19 +3762,19 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 		{
 			try
 			{
-				data.getUndoMngr().redo();
+				undoMngr.redo();
 			}
 			catch(CannotUndoException ex)
 			{
 				ex.printStackTrace();
 			}
 			updateRedoState();
-			data.getUndoAction().updateUndoState();
+			undoAction.updateUndoState();
 		}
 
 		protected void updateRedoState()
 		{
-			setEnabled(data.getUndoMngr().canRedo());
+			setEnabled(undoMngr.canRedo());
 		}
 	}
 
@@ -3656,9 +3784,9 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	{
 		public void undoableEditHappened(UndoableEditEvent uee)
 		{
-			data.getUndoMngr().addEdit(uee.getEdit());
-			data.getUndoAction().updateUndoState();
-			data.getRedoAction().updateRedoState();
+			undoMngr.addEdit(uee.getEdit());
+			undoAction.updateUndoState();
+			redoAction.updateRedoState();
 		}
 	}
 
