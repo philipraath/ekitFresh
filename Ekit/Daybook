@@ -1,0 +1,13 @@
+DayBook for Refactoring:
+
+11.06.12
+	Want to move convenience methods from EkitCore lines 3127 to 3314.
+	All of these methods are related in that they deal with construction and 
+	manipulation of toolbars.
+	
+	The pattern for this refactoring is EXTRACT CLASS.
+	
+	Prequisites:
+	1. Tests
+		a. Wrote test testJTPMain() to verify that jtpMain is valid.
+		b. 

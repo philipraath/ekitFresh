@@ -1,0 +1,52 @@
+8
+
+dir
+25
+https://jodypaul.com/svngenie/Philip/New%20Folder/src/com/hexidec/util
+https://jodypaul.com/svngenie
+
+
+
+2012-10-23T20:59:50.052892Z
+25
+philip
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+cc09d97c-3c2f-4f36-8497-fa8c7e5df71a
+
+Base64Codec.java
+file
+
+
+
+
+2012-10-23T20:49:20.000000Z
+b16c6f3822d5ee4ccb0590e3d523d920
+2012-10-23T20:59:50.052892Z
+25
+philip
+
+Translatrix.java
+file
+
+
+
+
+2012-10-23T20:49:20.000000Z
+ecbb19ce8704f5397e04facab64524f1
+2012-10-23T20:59:50.052892Z
+25
+philip
+
