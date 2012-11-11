@@ -350,6 +350,7 @@ public class EkitCore extends JPanel implements ActionListener, KeyListener, Foc
 	// Menu & Tool Key Arrays
 	private static Hashtable<String, JMenu>      htMenus = new Hashtable<String, JMenu>();
 	private static Hashtable<String, JComponent> htTools = new Hashtable<String, JComponent>();
+	EkitUtility convenience = new EkitUtility(); //instantiate convenience class that allows for refactoring
 
 	private final String appName = "Ekit";
 	private final String menuDialog = "..."; /* text to append to a MenuItem label when menu item opens a dialog */
